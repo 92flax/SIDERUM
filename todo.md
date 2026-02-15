@@ -50,3 +50,22 @@
 - [x] Astrological Core engine tests (15 tests passing)
 - [x] Compass sensor fusion tests (10 tests passing)
 - [x] Rune dictionary and bindrune generator tests (8 tests passing)
+
+## V2 Master Update
+- [x] Homescreen: Replace planet list with Magical Dashboard
+- [x] Homescreen: Planetary Hour hero card with Lord of the Hour
+- [x] Homescreen: Moon Phase visual widget
+- [x] Homescreen: Sky Verdict (Strongest Influence + Current Challenge)
+- [x] Homescreen: Quick Actions 2x2 grid (Ritual, Compass, Runes, Full Chart)
+- [x] Binderune Fix: Classify stemless runes (Gebo, Ingwaz, Jera, Dagaz)
+- [x] Binderune Fix: Overlay entire SVG path for stemless runes on stave
+- [x] Binderune Fix: Verify Fehu + Gebo + Uruz renders correctly
+- [x] Settings: Replace Lat/Long with Location Search Bar (Geocoding)
+- [x] Settings: Add GPS "Current Location" button
+- [x] Settings: Reverse geocoding to display City, Country
+- [x] Compass: Anti-collision offset for overlapping planet labels
+- [x] Compass: Altitude ring labels (Horizon 0°, 30°, 60°, Zenith 90°)
+- [x] Compass: Focus Mode - tap planet to highlight, dim others to 30%
+- [x] Chart Detail: Dynamic tags - only show active dignities
+- [x] Chart Detail: Verdict text based on score
+- [x] Chart Detail: Bug fix - Combust tag never appears for Sun

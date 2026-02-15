@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
-import { Text, View, StyleSheet, TextInput, ScrollView, Platform, Pressable } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { Text, View, StyleSheet, TextInput, ScrollView, Platform, Pressable, FlatList, ActivityIndicator } from 'react-native';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import { ScreenContainer } from '@/components/screen-container';
 import { useAstroStore } from '@/lib/astro/store';
+import { searchLocation, reverseGeocode, GeocodingResult } from '@/lib/geocoding';
 
 export default function SettingsScreen() {
   const location = useAstroStore((s) => s.location);
@@ -11,14 +12,18 @@ export default function SettingsScreen() {
   const setLocation = useAstroStore((s) => s.setLocation);
   const setDate = useAstroStore((s) => s.setDate);
 
-  const [latText, setLatText] = useState(location.latitude.toString());
-  const [lonText, setLonText] = useState(location.longitude.toString());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [locationName, setLocationName] = useState('');
+  const [isGettingGPS, setIsGettingGPS] = useState(false);
   const [dateText, setDateText] = useState('');
   const [timeText, setTimeText] = useState('');
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Reverse geocode current location on mount and when location changes
   useEffect(() => {
-    setLatText(location.latitude.toFixed(4));
-    setLonText(location.longitude.toFixed(4));
+    reverseGeocode(location.latitude, location.longitude).then(setLocationName);
   }, [location]);
 
   useEffect(() => {
@@ -27,30 +32,58 @@ export default function SettingsScreen() {
     setTimeText(`${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`);
   }, [date]);
 
+  // Debounced search
+  const handleSearchChange = (text: string) => {
+    setSearchQuery(text);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+
+    if (text.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    searchTimeout.current = setTimeout(async () => {
+      const results = await searchLocation(text);
+      setSearchResults(results);
+      setIsSearching(false);
+    }, 500);
+  };
+
+  const handleSelectLocation = (result: GeocodingResult) => {
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    setLocation({ latitude: result.latitude, longitude: result.longitude });
+    setSearchQuery('');
+    setSearchResults([]);
+    setLocationName(result.city && result.country ? `${result.city}, ${result.country}` : result.displayName.split(',').slice(0, 2).join(','));
+  };
+
   const handleUseGPS = async () => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+    setIsGettingGPS(true);
     try {
-      if (Platform.OS === 'web') return;
+      if (Platform.OS === ('web' as string)) {
+        setIsGettingGPS(false);
+        return;
+      }
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
+      if (status !== 'granted') {
+        setIsGettingGPS(false);
+        return;
+      }
       const loc = await Location.getCurrentPositionAsync({});
       setLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
     } catch (e) {
       // Silently fail
     }
-  };
-
-  const handleApplyLocation = () => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    const lat = parseFloat(latText);
-    const lon = parseFloat(lonText);
-    if (!isNaN(lat) && !isNaN(lon)) {
-      setLocation({ latitude: lat, longitude: lon });
-    }
+    setIsGettingGPS(false);
   };
 
   const handleApplyDateTime = () => {
@@ -82,50 +115,67 @@ export default function SettingsScreen() {
 
   return (
     <ScreenContainer>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Settings</Text>
 
         {/* Location Section */}
         <Text style={styles.sectionTitle}>Location</Text>
         <View style={styles.card}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Latitude</Text>
-            <TextInput
-              style={styles.input}
-              value={latText}
-              onChangeText={setLatText}
-              keyboardType="numeric"
-              placeholderTextColor="#6B6B6B"
-              returnKeyType="done"
-            />
+          {/* Current Location Display */}
+          <View style={styles.currentLocation}>
+            <Text style={styles.locationIcon}>📍</Text>
+            <View style={styles.locationInfo}>
+              <Text style={styles.locationName}>{locationName || 'Loading...'}</Text>
+              <Text style={styles.locationCoords}>
+                {location.latitude.toFixed(4)}°N, {location.longitude.toFixed(4)}°E
+              </Text>
+            </View>
           </View>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Longitude</Text>
+
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
             <TextInput
-              style={styles.input}
-              value={lonText}
-              onChangeText={setLonText}
-              keyboardType="numeric"
-              placeholderTextColor="#6B6B6B"
-              returnKeyType="done"
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={handleSearchChange}
+              placeholder="Search city or place..."
+              placeholderTextColor="#4A4A4A"
+              returnKeyType="search"
             />
+            {isSearching && <ActivityIndicator size="small" color="#D4AF37" style={styles.searchSpinner} />}
           </View>
-          <View style={styles.btnRow}>
-            <Pressable
-              onPress={handleApplyLocation}
-              style={({ pressed }) => [styles.btn, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
-            >
-              <Text style={styles.btnText}>Apply</Text>
-            </Pressable>
-            {Platform.OS !== 'web' && (
-              <Pressable
-                onPress={handleUseGPS}
-                style={({ pressed }) => [styles.btnSecondary, pressed && { opacity: 0.7 }]}
-              >
-                <Text style={styles.btnSecondaryText}>Use GPS</Text>
-              </Pressable>
+
+          {/* Search Results */}
+          {searchResults.length > 0 && (
+            <View style={styles.resultsList}>
+              {searchResults.map((result, index) => (
+                <Pressable
+                  key={index}
+                  onPress={() => handleSelectLocation(result)}
+                  style={({ pressed }) => [styles.resultItem, pressed && { backgroundColor: '#1A1A1A' }]}
+                >
+                  <Text style={styles.resultName}>
+                    {result.city || result.displayName.split(',')[0]}
+                  </Text>
+                  <Text style={styles.resultDetail} numberOfLines={1}>
+                    {result.displayName}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          {/* GPS Button */}
+          <Pressable
+            onPress={handleUseGPS}
+            style={({ pressed }) => [styles.gpsBtn, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
+          >
+            {isGettingGPS ? (
+              <ActivityIndicator size="small" color="#050505" />
+            ) : (
+              <Text style={styles.gpsBtnText}>📡 Use Current Location</Text>
             )}
-          </View>
+          </Pressable>
         </View>
 
         {/* Date/Time Section */}
@@ -138,7 +188,7 @@ export default function SettingsScreen() {
               value={dateText}
               onChangeText={setDateText}
               placeholder="2025-03-21"
-              placeholderTextColor="#6B6B6B"
+              placeholderTextColor="#4A4A4A"
               returnKeyType="done"
             />
           </View>
@@ -149,7 +199,7 @@ export default function SettingsScreen() {
               value={timeText}
               onChangeText={setTimeText}
               placeholder="12:00"
-              placeholderTextColor="#6B6B6B"
+              placeholderTextColor="#4A4A4A"
               returnKeyType="done"
             />
           </View>
@@ -176,7 +226,7 @@ export default function SettingsScreen() {
           <Text style={styles.aboutText}>
             Professional-grade application for classical astrologers and ceremonial magicians.
           </Text>
-          <Text style={styles.aboutVersion}>Version 1.0.0</Text>
+          <Text style={styles.aboutVersion}>Version 2.0.0</Text>
           <View style={styles.aboutRow}>
             <Text style={styles.aboutLabel}>Calculations</Text>
             <Text style={styles.aboutValue}>astronomy-engine</Text>
@@ -188,6 +238,10 @@ export default function SettingsScreen() {
           <View style={styles.aboutRow}>
             <Text style={styles.aboutLabel}>Triplicity</Text>
             <Text style={styles.aboutValue}>Dorothean</Text>
+          </View>
+          <View style={styles.aboutRow}>
+            <Text style={styles.aboutLabel}>Geocoding</Text>
+            <Text style={styles.aboutValue}>OpenStreetMap / Nominatim</Text>
           </View>
         </View>
       </ScrollView>
@@ -225,6 +279,86 @@ const styles = StyleSheet.create({
     borderColor: '#1A1A1A',
     borderRadius: 12,
     padding: 16,
+  },
+  currentLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1A1A1A',
+  },
+  locationIcon: {
+    fontSize: 22,
+  },
+  locationInfo: {
+    flex: 1,
+  },
+  locationName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#E0E0E0',
+  },
+  locationCoords: {
+    fontFamily: 'JetBrainsMono',
+    fontSize: 11,
+    color: '#6B6B6B',
+    marginTop: 2,
+  },
+  searchContainer: {
+    position: 'relative',
+    marginBottom: 10,
+  },
+  searchInput: {
+    backgroundColor: '#050505',
+    borderWidth: 1,
+    borderColor: '#1A1A1A',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: '#E0E0E0',
+    fontSize: 14,
+  },
+  searchSpinner: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+  },
+  resultsList: {
+    backgroundColor: '#0A0A0A',
+    borderWidth: 1,
+    borderColor: '#1A1A1A',
+    borderRadius: 8,
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  resultItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1A1A1A',
+  },
+  resultName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E0E0E0',
+  },
+  resultDetail: {
+    fontSize: 11,
+    color: '#6B6B6B',
+    marginTop: 2,
+  },
+  gpsBtn: {
+    backgroundColor: '#D4AF37',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  gpsBtnText: {
+    color: '#050505',
+    fontSize: 14,
+    fontWeight: '700',
   },
   inputGroup: {
     marginBottom: 12,

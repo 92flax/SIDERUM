@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Text, View, StyleSheet, FlatList, ScrollView } from 'react-native';
+import { Text, View, StyleSheet, FlatList } from 'react-native';
 import { ScreenContainer } from '@/components/screen-container';
 import { useAstroStore } from '@/lib/astro/store';
 import {
@@ -13,9 +13,18 @@ const MAIN_PLANETS: Planet[] = [
   'NorthNode', 'SouthNode', 'Lilith',
 ];
 
+function getScoreVerdict(score: number): { text: string; color: string } {
+  if (score >= 7) return { text: 'Exceptional power. Ideal for rituals and invocations.', color: '#22C55E' };
+  if (score >= 4) return { text: 'Strong dignity. Favorable for magical workings.', color: '#22C55E' };
+  if (score >= 1) return { text: 'Moderate strength. Proceed with awareness.', color: '#4ADE80' };
+  if (score === 0) return { text: 'Peregrine. Neutral influence, no essential dignity.', color: '#6B6B6B' };
+  if (score >= -4) return { text: 'Weakened state. Consider timing alternatives.', color: '#F59E0B' };
+  if (score >= -7) return { text: 'Debilitated. Exercise significant caution.', color: '#EF4444' };
+  return { text: 'Extreme debility. Avoid ritual work if possible.', color: '#EF4444' };
+}
+
 export default function ChartScreen() {
   const chartData = useAstroStore((s) => s.chartData);
-  const recalculate = useAstroStore((s) => s.recalculate);
 
   if (!chartData) {
     return (
@@ -32,6 +41,30 @@ export default function ChartScreen() {
     const dignity = chartData.dignities[item.planet];
     const condition = chartData.conditions[item.planet];
     const color = PLANET_COLORS[item.planet];
+    const verdict = getScoreVerdict(dignity.score);
+
+    // Collect only ACTIVE dignity tags
+    const activeDignities: Array<{ label: string; positive: boolean }> = [];
+    if (dignity.domicile) activeDignities.push({ label: 'Domicile', positive: true });
+    if (dignity.exaltation) activeDignities.push({ label: 'Exaltation', positive: true });
+    if (dignity.triplicity) activeDignities.push({ label: 'Triplicity', positive: true });
+    if (dignity.term) activeDignities.push({ label: 'Term', positive: true });
+    if (dignity.face) activeDignities.push({ label: 'Face', positive: true });
+    if (dignity.detriment) activeDignities.push({ label: 'Detriment', positive: false });
+    if (dignity.fall) activeDignities.push({ label: 'Fall', positive: false });
+    if (dignity.peregrine) activeDignities.push({ label: 'Peregrine', positive: false });
+
+    // Collect only ACTIVE conditions
+    // BUG FIX: Combust/Under Beams/Cazimi never appear for the Sun itself
+    const activeConditions: Array<{ label: string; icon: string; positive: boolean }> = [];
+    if (condition.isRetrograde) activeConditions.push({ label: 'Retrograde', icon: '℞', positive: false });
+    if (item.planet !== 'Sun') {
+      if (condition.isCazimi) activeConditions.push({ label: 'Cazimi', icon: '☉', positive: true });
+      if (condition.isCombust) activeConditions.push({ label: 'Combust', icon: '🔥', positive: false });
+      if (condition.isUnderBeams) activeConditions.push({ label: 'Under Beams', icon: '☀', positive: false });
+    }
+
+    const hasAnyTag = activeDignities.length > 0 || activeConditions.length > 0;
 
     return (
       <View style={styles.detailCard}>
@@ -49,25 +82,46 @@ export default function ChartScreen() {
           </Text>
         </View>
 
-        {/* Essential Dignities */}
-        <View style={styles.dignityGrid}>
-          <DignityBadge label="Domicile" active={dignity.domicile} positive />
-          <DignityBadge label="Exaltation" active={dignity.exaltation} positive />
-          <DignityBadge label="Triplicity" active={dignity.triplicity} positive />
-          <DignityBadge label="Term" active={dignity.term} positive />
-          <DignityBadge label="Face" active={dignity.face} positive />
-          <DignityBadge label="Detriment" active={dignity.detriment} positive={false} />
-          <DignityBadge label="Fall" active={dignity.fall} positive={false} />
-          <DignityBadge label="Peregrine" active={dignity.peregrine} positive={false} />
+        {/* Verdict Text */}
+        <View style={[styles.verdictBox, { borderLeftColor: verdict.color }]}>
+          <Text style={[styles.verdictText, { color: verdict.color }]}>{verdict.text}</Text>
         </View>
 
-        {/* Conditions */}
-        <View style={styles.conditionGrid}>
-          <ConditionBadge label="Retrograde" active={condition.isRetrograde} icon="℞" />
-          <ConditionBadge label="Combust" active={condition.isCombust} icon="🔥" />
-          <ConditionBadge label="Cazimi" active={condition.isCazimi} icon="☉" positive />
-          <ConditionBadge label="Under Beams" active={condition.isUnderBeams} icon="☀" />
-        </View>
+        {/* Active Dignity Tags (only show active ones) */}
+        {hasAnyTag && (
+          <View style={styles.tagGrid}>
+            {activeDignities.map(({ label, positive }) => (
+              <View
+                key={label}
+                style={[
+                  styles.tag,
+                  {
+                    borderColor: positive ? '#22C55E40' : '#EF444440',
+                    backgroundColor: positive ? '#22C55E10' : '#EF444410',
+                  },
+                ]}
+              >
+                <Text style={[styles.tagText, { color: positive ? '#22C55E' : '#EF4444' }]}>
+                  {label}
+                </Text>
+              </View>
+            ))}
+            {activeConditions.map(({ label, icon, positive }) => {
+              const condColor = positive ? '#22C55E' : '#F59E0B';
+              return (
+                <View
+                  key={label}
+                  style={[
+                    styles.tag,
+                    { borderColor: condColor + '40', backgroundColor: condColor + '10' },
+                  ]}
+                >
+                  <Text style={[styles.tagText, { color: condColor }]}>{icon} {label}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         {/* Technical Data */}
         <View style={styles.techRow}>
@@ -126,37 +180,6 @@ export default function ChartScreen() {
         showsVerticalScrollIndicator={false}
       />
     </ScreenContainer>
-  );
-}
-
-function DignityBadge({ label, active, positive }: { label: string; active: boolean; positive: boolean }) {
-  if (!active) {
-    return (
-      <View style={styles.dignityBadge}>
-        <Text style={styles.dignityInactive}>{label}</Text>
-      </View>
-    );
-  }
-  return (
-    <View style={[styles.dignityBadge, { borderColor: positive ? '#22C55E40' : '#EF444440', backgroundColor: positive ? '#22C55E10' : '#EF444410' }]}>
-      <Text style={[styles.dignityActive, { color: positive ? '#22C55E' : '#EF4444' }]}>{label}</Text>
-    </View>
-  );
-}
-
-function ConditionBadge({ label, active, icon, positive }: { label: string; active: boolean; icon: string; positive?: boolean }) {
-  if (!active) {
-    return (
-      <View style={styles.conditionBadge}>
-        <Text style={styles.conditionInactive}>{icon} {label}</Text>
-      </View>
-    );
-  }
-  const color = positive ? '#22C55E' : '#F59E0B';
-  return (
-    <View style={[styles.conditionBadge, { borderColor: color + '40', backgroundColor: color + '10' }]}>
-      <Text style={[styles.conditionActive, { color }]}>{icon} {label}</Text>
-    </View>
   );
 }
 
@@ -234,45 +257,29 @@ const styles = StyleSheet.create({
   scorePositive: { color: '#22C55E' },
   scoreNegative: { color: '#EF4444' },
   scoreNeutral: { color: '#6B6B6B' },
-  dignityGrid: {
+  verdictBox: {
+    marginTop: 10,
+    paddingLeft: 10,
+    borderLeftWidth: 3,
+  },
+  verdictText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+  tagGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
     marginTop: 10,
   },
-  dignityBadge: {
+  tag: {
     borderWidth: 1,
-    borderColor: '#1A1A1A',
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  dignityInactive: {
-    fontSize: 10,
-    color: '#333',
-  },
-  dignityActive: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  conditionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 8,
-  },
-  conditionBadge: {
-    borderWidth: 1,
-    borderColor: '#1A1A1A',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  conditionInactive: {
-    fontSize: 10,
-    color: '#333',
-  },
-  conditionActive: {
+  tagText: {
     fontSize: 10,
     fontWeight: '700',
   },

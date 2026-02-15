@@ -1,5 +1,6 @@
 // ============================================================
 // SIDERUM – Elder Futhark Rune Dictionary & Bindrune Generator
+// V2: Stemless rune support (Gebo, Ingwaz, Jera, Dagaz)
 // ============================================================
 
 import { Planet } from '../astro/types';
@@ -13,17 +14,18 @@ export interface Rune {
   element?: string;
   // SVG path segments for the rune's distinctive strokes (relative to central stave)
   branches: RuneBranch[];
+  // If true, the rune has no vertical stave (e.g., Gebo "X", Ingwaz diamond)
+  // These runes are overlaid as complete shapes on the central stave
+  isStemless?: boolean;
+  // SVG path data for stemless runes (rendered as-is, centered on stave)
+  svgPath?: string;
 }
 
 export interface RuneBranch {
-  // Start and end points relative to stave (0=top, 1=bottom)
   startY: number;
   endY: number;
-  // Direction: -1 = left, 1 = right
   direction: number;
-  // Angle in degrees from vertical
   angle: number;
-  // Length relative to stave height
   length: number;
 }
 
@@ -100,12 +102,10 @@ export const ELDER_FUTHARK: Rune[] = [
     meaning: 'Gift, Partnership',
     keywords: ['gift', 'partnership', 'love', 'balance', 'exchange'],
     planet: 'Venus',
-    branches: [
-      { startY: 0.15, endY: 0.15, direction: 1, angle: 45, length: 0.35 },
-      { startY: 0.15, endY: 0.15, direction: -1, angle: 45, length: 0.35 },
-      { startY: 0.5, endY: 0.5, direction: 1, angle: -45, length: 0.35 },
-      { startY: 0.5, endY: 0.5, direction: -1, angle: -45, length: 0.35 },
-    ],
+    isStemless: true,
+    // X shape centered on stave
+    svgPath: 'M -0.3 -0.3 L 0.3 0.3 M 0.3 -0.3 L -0.3 0.3',
+    branches: [],
   },
   {
     name: 'Wunjo',
@@ -146,7 +146,7 @@ export const ELDER_FUTHARK: Rune[] = [
     meaning: 'Ice, Stillness',
     keywords: ['stillness', 'ice', 'focus', 'concentration', 'clarity'],
     planet: 'Saturn',
-    branches: [], // Just the stave itself
+    branches: [],
   },
   {
     name: 'Jera',
@@ -154,12 +154,10 @@ export const ELDER_FUTHARK: Rune[] = [
     meaning: 'Year, Harvest',
     keywords: ['harvest', 'reward', 'cycle', 'season', 'patience'],
     planet: 'Jupiter',
-    branches: [
-      { startY: 0.15, endY: 0.15, direction: 1, angle: 45, length: 0.2 },
-      { startY: 0.15, endY: 0.35, direction: 1, angle: -45, length: 0.2 },
-      { startY: 0.5, endY: 0.5, direction: -1, angle: 45, length: 0.2 },
-      { startY: 0.5, endY: 0.7, direction: -1, angle: -45, length: 0.2 },
-    ],
+    isStemless: true,
+    // Two interlocking angular shapes (like two chevrons)
+    svgPath: 'M 0.0 -0.35 L 0.25 -0.1 L 0.0 0.0 M 0.0 0.35 L -0.25 0.1 L 0.0 0.0',
+    branches: [],
   },
   {
     name: 'Eihwaz',
@@ -270,12 +268,10 @@ export const ELDER_FUTHARK: Rune[] = [
     meaning: 'Ing, Fertility',
     keywords: ['fertility', 'potential', 'gestation', 'internal', 'seed'],
     planet: 'Venus',
-    branches: [
-      { startY: 0.15, endY: 0.15, direction: 1, angle: 45, length: 0.2 },
-      { startY: 0.15, endY: 0.15, direction: -1, angle: 45, length: 0.2 },
-      { startY: 0.5, endY: 0.5, direction: 1, angle: -45, length: 0.2 },
-      { startY: 0.5, endY: 0.5, direction: -1, angle: -45, length: 0.2 },
-    ],
+    isStemless: true,
+    // Diamond shape
+    svgPath: 'M 0.0 -0.3 L 0.25 0.0 L 0.0 0.3 L -0.25 0.0 Z',
+    branches: [],
   },
   {
     name: 'Dagaz',
@@ -283,12 +279,10 @@ export const ELDER_FUTHARK: Rune[] = [
     meaning: 'Day, Breakthrough',
     keywords: ['breakthrough', 'awakening', 'dawn', 'clarity', 'transformation'],
     planet: 'Sun',
-    branches: [
-      { startY: 0.15, endY: 0.15, direction: 1, angle: 45, length: 0.35 },
-      { startY: 0.15, endY: 0.15, direction: -1, angle: -45, length: 0.35 },
-      { startY: 0.5, endY: 0.5, direction: 1, angle: -45, length: 0.35 },
-      { startY: 0.5, endY: 0.5, direction: -1, angle: 45, length: 0.35 },
-    ],
+    isStemless: true,
+    // Hourglass/bowtie shape
+    svgPath: 'M -0.25 -0.3 L 0.25 -0.3 L -0.25 0.3 L 0.25 0.3 Z',
+    branches: [],
   },
   {
     name: 'Othala',
@@ -329,37 +323,67 @@ export function generateBindruneSVG(
 
   let paths = '';
 
-  // Central stave
+  // Central stave (always present)
   paths += `<line x1="${cx}" y1="${staveTop}" x2="${cx}" y2="${staveBottom}" stroke="#D4AF37" stroke-width="2" stroke-linecap="round"/>`;
 
-  // Collect all branches from selected runes, offset slightly for each rune
-  const allBranches: Array<{ branch: RuneBranch; runeIndex: number }> = [];
-  selectedRunes.forEach((rune, idx) => {
+  // Collect branches from non-stemless runes
+  const stemmedRunes = selectedRunes.filter(r => !r.isStemless);
+  const stemlessRunes = selectedRunes.filter(r => r.isStemless);
+
+  const usedPositions = new Set<string>();
+
+  // Render branches for stemmed runes
+  stemmedRunes.forEach((rune, runeIndex) => {
     rune.branches.forEach(branch => {
-      allBranches.push({ branch, runeIndex: idx });
+      const offset = runeIndex * 0.05;
+      const startYPos = staveTop + (branch.startY + offset) * staveHeight;
+
+      const angleRad = (branch.angle * Math.PI) / 180;
+      const len = branch.length * branchScale;
+      const dir = branch.direction || 1;
+
+      const endX = cx + dir * len * Math.sin(angleRad);
+      const endY = startYPos - len * Math.cos(angleRad);
+
+      const key = `${Math.round(startYPos)}-${Math.round(endX)}-${Math.round(endY)}`;
+      if (!usedPositions.has(key)) {
+        usedPositions.add(key);
+        paths += `\n  <line x1="${cx}" y1="${startYPos.toFixed(1)}" x2="${endX.toFixed(1)}" y2="${endY.toFixed(1)}" stroke="#D4AF37" stroke-width="1.5" stroke-linecap="round"/>`;
+      }
     });
   });
 
-  // Distribute branches along the stave
-  const usedPositions = new Set<string>();
+  // Render stemless runes as overlay shapes centered on the stave
+  stemlessRunes.forEach((rune, idx) => {
+    if (!rune.svgPath) return;
 
-  allBranches.forEach(({ branch, runeIndex }) => {
-    // Offset position slightly per rune to avoid exact overlap
-    const offset = runeIndex * 0.05;
-    const startYPos = staveTop + (branch.startY + offset) * staveHeight;
+    const centerY = staveTop + staveHeight * (0.35 + idx * 0.15); // Distribute along stave
+    const scale = staveHeight * 0.45;
 
-    const angleRad = (branch.angle * Math.PI) / 180;
-    const len = branch.length * branchScale;
-    const dir = branch.direction || 1;
+    // Parse the svgPath and convert relative coordinates to absolute
+    const segments = rune.svgPath.split(/(?=[MLZ])/);
+    let pathData = '';
 
-    const endX = cx + dir * len * Math.sin(angleRad);
-    const endY = startYPos - len * Math.cos(angleRad);
+    for (const seg of segments) {
+      const trimmed = seg.trim();
+      if (!trimmed) continue;
 
-    // Create unique key to avoid exact duplicates
-    const key = `${Math.round(startYPos)}-${Math.round(endX)}-${Math.round(endY)}`;
-    if (!usedPositions.has(key)) {
-      usedPositions.add(key);
-      paths += `\n  <line x1="${cx}" y1="${startYPos.toFixed(1)}" x2="${endX.toFixed(1)}" y2="${endY.toFixed(1)}" stroke="#D4AF37" stroke-width="1.5" stroke-linecap="round"/>`;
+      const cmd = trimmed[0];
+      if (cmd === 'Z') {
+        pathData += ' Z';
+        continue;
+      }
+
+      const coords = trimmed.slice(1).trim().split(/\s+/).map(Number);
+      if (coords.length >= 2) {
+        const absX = cx + coords[0] * scale;
+        const absY = centerY + coords[1] * scale;
+        pathData += ` ${cmd} ${absX.toFixed(1)} ${absY.toFixed(1)}`;
+      }
+    }
+
+    if (pathData) {
+      paths += `\n  <path d="${pathData.trim()}" stroke="#D4AF37" stroke-width="1.5" stroke-linecap="round" fill="none"/>`;
     }
   });
 
