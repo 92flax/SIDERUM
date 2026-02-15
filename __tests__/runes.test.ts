@@ -12,7 +12,8 @@ describe('Elder Futhark Dictionary', () => {
       expect(rune.symbol).toBeTruthy();
       expect(rune.meaning).toBeTruthy();
       expect(rune.keywords.length).toBeGreaterThan(0);
-      expect(Array.isArray(rune.branches)).toBe(true);
+      expect(Array.isArray(rune.svgPaths)).toBe(true);
+      expect(rune.svgPaths.length).toBeGreaterThan(0);
     }
   });
 

@@ -69,3 +69,37 @@
 - [x] Chart Detail: Dynamic tags - only show active dignities
 - [x] Chart Detail: Verdict text based on score
 - [x] Chart Detail: Bug fix - Combust tag never appears for Sun
+
+## Beta Update
+
+### Module 1: Runic Forge – Absolute Stacking
+- [x] Abandon path merging, implement absolute stacking SVG strategy
+- [x] Layer 0: Central vertical Stave (Spine)
+- [x] Layer 1-N: Full SVG of each rune stacked on spine
+- [x] Stemmed runes: align vertical stem with central spine
+- [x] Stemless runes (Gebo, Ingwaz, Jera, Othala): center geometrically on spine
+- [x] Verify Gebo X overlays correctly on vertical stave
+
+### Module 2: Ritual UI – Holo-Pad
+- [x] Split-screen layout: Top 40% instruction card, Bottom 60% Holo-Pad
+- [x] Render target shape (Pentagram etc.) as faint glowing dashed line
+- [x] Animated light particle / numbered arrows showing stroke order
+- [x] Success state: shape turns solid gold and pulses
+- [x] Eliminate Next button between reading and drawing steps
+
+### Module 4: Monetization – SIDERUM PRO
+- [x] Create subscription store (Pro tier state management)
+- [x] Neophyte (Free): Basic Dashboard, Standard Chart, Basic Rituals (LBRP)
+- [x] Adeptus (Pro): Event Horizon, Advanced Rituals, Unlimited Bindrunes, Aspectarian
+- [x] Gold Padlock icon on Pro features
+- [x] Upgrade modal with benefits list
+- [x] Feature gating throughout the app
+
+### Module 3: Astro-Intelligence
+- [x] Event Horizon: Calculate upcoming eclipses, retrogrades, conjunctions (2 years)
+- [x] Event search UI: "Find next Solar Eclipse"
+- [x] Dashboard widget: Next major event warning
+- [x] Aspectarian: Collapsible table of current planetary aspects
+- [x] Aspect filters: Major aspects only (Conjunction, Opposition, Square, Trine) with orb < 3°
+- [x] Exact aspect highlighting on Dashboard (< 1° orb)
+- [x] Ruler of the Day recommendation with ritual suggestion

@@ -1,11 +1,16 @@
-import { useEffect, useMemo } from 'react';
-import { Text, View, ScrollView, StyleSheet, Platform, Pressable, Dimensions } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Text, View, ScrollView, StyleSheet, Platform, Pressable, Dimensions, TextInput } from 'react-native';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { ScreenContainer } from '@/components/screen-container';
+import { PaywallModal, ProBadge } from '@/components/paywall-modal';
 import { useAstroStore } from '@/lib/astro/store';
+import { useProStore } from '@/lib/store/pro-store';
 import { calculatePlanetaryHours, calculateMoonPhase } from '@/lib/astro/planetary-hours';
+import { getRulerRecommendation } from '@/lib/astro/ruler-of-day';
+import { calculateEventHorizon, getNextMajorEvent, searchEvents, AstroEvent } from '@/lib/astro/events';
+import { getExactAspects, Aspect } from '@/lib/astro/aspects';
 import { PLANET_SYMBOLS, PLANET_COLORS, ZODIAC_SYMBOLS, Planet } from '@/lib/astro/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -19,6 +24,14 @@ export default function HomeScreen() {
   const date = useAstroStore((s) => s.date);
   const setDate = useAstroStore((s) => s.setDate);
   const router = useRouter();
+
+  const tier = useProStore((s) => s.tier);
+  const isFeatureUnlocked = useProStore((s) => s.isFeatureUnlocked);
+
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallFeature, setPaywallFeature] = useState<string | undefined>();
+  const [eventSearch, setEventSearch] = useState('');
+  const [showEventSearch, setShowEventSearch] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -54,6 +67,34 @@ export default function HomeScreen() {
     return calculateMoonPhase(date);
   }, [date]);
 
+  // Ruler of the Day
+  const rulerOfDay = useMemo(() => {
+    return getRulerRecommendation(date);
+  }, [date]);
+
+  // Event Horizon - next major event
+  const eventHorizon = useMemo(() => {
+    try {
+      const events = calculateEventHorizon(date, location, 2); // 2 years for performance
+      const nextEvent = getNextMajorEvent(events, date);
+      return { events, nextEvent };
+    } catch {
+      return { events: [], nextEvent: null };
+    }
+  }, [date, location]);
+
+  // Filtered events for search
+  const filteredEvents = useMemo(() => {
+    if (!eventSearch.trim()) return eventHorizon.events.slice(0, 10);
+    return searchEvents(eventHorizon.events, eventSearch).slice(0, 20);
+  }, [eventHorizon.events, eventSearch]);
+
+  // Exact aspects for dashboard highlight
+  const exactAspects = useMemo(() => {
+    if (!chartData) return [];
+    return getExactAspects(chartData.planets);
+  }, [chartData]);
+
   // Sky Verdict: strongest and weakest influence
   const skyVerdict = useMemo(() => {
     if (!chartData) return null;
@@ -78,6 +119,15 @@ export default function HomeScreen() {
     router.push(`/(tabs)/${tab}` as any);
   };
 
+  const handleProFeature = (featureId: string) => {
+    if (!isFeatureUnlocked(featureId)) {
+      setPaywallFeature(featureId);
+      setShowPaywall(true);
+      return false;
+    }
+    return true;
+  };
+
   if (isCalculating || !chartData) {
     return (
       <ScreenContainer>
@@ -94,6 +144,11 @@ export default function HomeScreen() {
   const sectColor = chartData.sect === 'Day' ? '#D4AF37' : '#0055A4';
   const sectLabel = chartData.sect === 'Day' ? '☉ Day Sect' : '☽ Night Sect';
 
+  // Days until next event
+  const daysUntilEvent = eventHorizon.nextEvent
+    ? Math.ceil((eventHorizon.nextEvent.date.getTime() - date.getTime()) / 86400000)
+    : null;
+
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -107,6 +162,26 @@ export default function HomeScreen() {
         <View style={[styles.sectBadge, { backgroundColor: sectColor + '20', borderColor: sectColor }]}>
           <Text style={[styles.sectText, { color: sectColor }]}>{sectLabel}</Text>
         </View>
+
+        {/* ===== Event Horizon Warning Widget ===== */}
+        {eventHorizon.nextEvent && daysUntilEvent !== null && daysUntilEvent <= 30 && (
+          <Pressable
+            onPress={() => {
+              if (handleProFeature('event_horizon')) {
+                setShowEventSearch(true);
+              }
+            }}
+            style={({ pressed }) => [styles.eventWarning, pressed && { opacity: 0.8 }]}
+          >
+            <Text style={styles.eventWarningIcon}>⚠</Text>
+            <View style={styles.eventWarningContent}>
+              <Text style={styles.eventWarningTitle}>{eventHorizon.nextEvent.title}</Text>
+              <Text style={styles.eventWarningDate}>
+                in {daysUntilEvent} {daysUntilEvent === 1 ? 'day' : 'days'}
+              </Text>
+            </View>
+          </Pressable>
+        )}
 
         {/* Hero Card: Planetary Hour + Moon Phase */}
         <View style={styles.heroRow}>
@@ -153,6 +228,36 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* ===== Ruler of the Day ===== */}
+        <View style={[styles.rulerCard, { borderColor: rulerOfDay.color + '40' }]}>
+          <View style={styles.rulerHeader}>
+            <Text style={[styles.rulerSymbol, { color: rulerOfDay.color }]}>{rulerOfDay.symbol}</Text>
+            <View style={styles.rulerInfo}>
+              <Text style={styles.rulerLabel}>Ruler of {rulerOfDay.dayName}</Text>
+              <Text style={[styles.rulerName, { color: rulerOfDay.color }]}>{rulerOfDay.planet}</Text>
+            </View>
+          </View>
+          <Text style={styles.rulerRecommendation}>{rulerOfDay.recommendation}</Text>
+        </View>
+
+        {/* ===== Exact Aspects Highlight ===== */}
+        {exactAspects.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Exact Aspects</Text>
+            {exactAspects.slice(0, 3).map((asp, i) => (
+              <View key={i} style={styles.aspectHighlight}>
+                <Text style={styles.aspectSymbols}>
+                  {PLANET_SYMBOLS[asp.planet1]} {asp.symbol} {PLANET_SYMBOLS[asp.planet2]}
+                </Text>
+                <View style={styles.aspectInfo}>
+                  <Text style={styles.aspectType}>{asp.type}</Text>
+                  <Text style={styles.aspectOrb}>{asp.orb.toFixed(1)}° orb</Text>
+                </View>
+              </View>
+            ))}
+          </>
+        )}
+
         {/* Sky Verdict */}
         {skyVerdict && (
           <>
@@ -165,7 +270,7 @@ export default function HomeScreen() {
                   <Text style={[styles.verdictSymbol, { color: PLANET_COLORS[skyVerdict.strongest.planet] }]}>
                     {PLANET_SYMBOLS[skyVerdict.strongest.planet]}
                   </Text>
-                  <View style={styles.verdictInfo}>
+                  <View style={styles.verdictInfoCol}>
                     <Text style={styles.verdictName}>{skyVerdict.strongest.planet}</Text>
                     <Text style={styles.verdictSign}>
                       {ZODIAC_SYMBOLS[skyVerdict.strongest.position.sign]} {skyVerdict.strongest.position.sign}
@@ -187,7 +292,7 @@ export default function HomeScreen() {
                   <Text style={[styles.verdictSymbol, { color: PLANET_COLORS[skyVerdict.weakest.planet] }]}>
                     {PLANET_SYMBOLS[skyVerdict.weakest.planet]}
                   </Text>
-                  <View style={styles.verdictInfo}>
+                  <View style={styles.verdictInfoCol}>
                     <Text style={styles.verdictName}>{skyVerdict.weakest.planet}</Text>
                     <Text style={styles.verdictSign}>
                       {ZODIAC_SYMBOLS[skyVerdict.weakest.position.sign]} {skyVerdict.weakest.position.sign}
@@ -204,18 +309,6 @@ export default function HomeScreen() {
             </View>
           </>
         )}
-
-        {/* Arabic Parts */}
-        <View style={styles.partsRow}>
-          {chartData.arabicParts.map((part) => (
-            <View key={part.name} style={styles.partBadge}>
-              <Text style={styles.partName}>{part.name}</Text>
-              <Text style={styles.partValue}>
-                {ZODIAC_SYMBOLS[part.sign]} {part.signDegree}°
-              </Text>
-            </View>
-          ))}
-        </View>
 
         {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -250,17 +343,75 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {/* Day Ruler */}
-        <View style={styles.dayRulerCard}>
-          <Text style={styles.dayRulerLabel}>Day Ruler</Text>
-          <View style={styles.dayRulerRow}>
-            <Text style={[styles.dayRulerSymbol, { color: PLANET_COLORS[planetaryHour.dayRuler] }]}>
-              {PLANET_SYMBOLS[planetaryHour.dayRuler]}
-            </Text>
-            <Text style={styles.dayRulerName}>{planetaryHour.dayRuler}</Text>
+        {/* ===== Event Horizon Search (Pro) ===== */}
+        <View style={styles.eventSection}>
+          <View style={styles.eventHeader}>
+            <Text style={styles.sectionTitle}>Event Horizon</Text>
+            {!isFeatureUnlocked('event_horizon') && (
+              <ProBadge onPress={() => handleProFeature('event_horizon')} />
+            )}
           </View>
+
+          {isFeatureUnlocked('event_horizon') ? (
+            <>
+              <View style={styles.searchBar}>
+                <Text style={styles.searchIcon}>🔍</Text>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search events (e.g. solar eclipse)"
+                  placeholderTextColor="#4A4A4A"
+                  value={eventSearch}
+                  onChangeText={setEventSearch}
+                  returnKeyType="done"
+                />
+              </View>
+              {filteredEvents.slice(0, 5).map((evt) => (
+                <View key={evt.id} style={styles.eventCard}>
+                  <Text style={styles.eventType}>
+                    {evt.type === 'solar_eclipse' ? '🌑' :
+                     evt.type === 'lunar_eclipse' ? '🌕' :
+                     evt.type === 'retrograde_start' ? '℞' :
+                     evt.type === 'retrograde_end' ? '℞D' :
+                     evt.type === 'conjunction' ? '☌' : '☍'}
+                  </Text>
+                  <View style={styles.eventInfo}>
+                    <Text style={styles.eventTitle}>{evt.title}</Text>
+                    <Text style={styles.eventDate}>
+                      {evt.date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </>
+          ) : (
+            <Pressable
+              onPress={() => handleProFeature('event_horizon')}
+              style={({ pressed }) => [styles.lockedCard, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.lockedIcon}>🔒</Text>
+              <Text style={styles.lockedText}>Upgrade to search eclipses, retrogrades & conjunctions</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* Arabic Parts */}
+        <View style={styles.partsRow}>
+          {chartData.arabicParts.map((part) => (
+            <View key={part.name} style={styles.partBadge}>
+              <Text style={styles.partName}>{part.name}</Text>
+              <Text style={styles.partValue}>
+                {ZODIAC_SYMBOLS[part.sign]} {part.signDegree}°
+              </Text>
+            </View>
+          ))}
         </View>
       </ScrollView>
+
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        featureId={paywallFeature}
+      />
     </ScreenContainer>
   );
 }
@@ -276,234 +427,109 @@ function getScoreVerdict(score: number): string {
 }
 
 const styles = StyleSheet.create({
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 100,
+  content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 },
+  title: { fontFamily: 'Cinzel', fontSize: 32, color: '#D4AF37', textAlign: 'center', letterSpacing: 6 },
+  subtitle: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', textAlign: 'center', marginTop: 4 },
+  sectBadge: { alignSelf: 'center', marginTop: 10, paddingHorizontal: 16, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+  sectText: { fontFamily: 'JetBrainsMono', fontSize: 12, fontWeight: '600' },
+
+  // Event Warning
+  eventWarning: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#EF444410',
+    borderWidth: 1, borderColor: '#EF444430', borderRadius: 12, padding: 12, marginTop: 12, gap: 10,
   },
-  title: {
-    fontFamily: 'Cinzel',
-    fontSize: 32,
-    color: '#D4AF37',
-    textAlign: 'center',
-    letterSpacing: 6,
+  eventWarningIcon: { fontSize: 24 },
+  eventWarningContent: { flex: 1 },
+  eventWarningTitle: { fontSize: 13, fontWeight: '600', color: '#EF4444' },
+  eventWarningDate: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 2 },
+
+  // Hero
+  heroRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  heroCard: { flex: 1, backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 14, padding: 14, alignItems: 'center' },
+  heroLabel: { fontSize: 10, color: '#6B6B6B', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 },
+  heroSymbol: { fontSize: 36 },
+  moonEmoji: { fontSize: 36 },
+  heroTitle: { fontFamily: 'Cinzel', fontSize: 14, marginTop: 4, letterSpacing: 1 },
+  heroMeta: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', marginTop: 2 },
+  heroTime: { fontFamily: 'JetBrainsMono', fontSize: 9, color: '#4A4A4A', marginTop: 4 },
+
+  // Ruler of Day
+  rulerCard: {
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 12,
   },
-  subtitle: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 12,
-    color: '#6B6B6B',
-    textAlign: 'center',
-    marginTop: 4,
+  rulerHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rulerSymbol: { fontSize: 28 },
+  rulerInfo: { flex: 1 },
+  rulerLabel: { fontSize: 10, color: '#6B6B6B', letterSpacing: 1, textTransform: 'uppercase' },
+  rulerName: { fontFamily: 'Cinzel', fontSize: 16, letterSpacing: 2, marginTop: 2 },
+  rulerRecommendation: { fontSize: 12, color: '#E0E0E0', lineHeight: 18, marginTop: 10, fontStyle: 'italic' },
+
+  // Exact Aspects
+  aspectHighlight: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#D4AF3708',
+    borderWidth: 1, borderColor: '#D4AF3720', borderRadius: 10, padding: 12, marginBottom: 6, gap: 12,
   },
-  sectBadge: {
-    alignSelf: 'center',
-    marginTop: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  sectText: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  heroRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 16,
-  },
-  heroCard: {
-    flex: 1,
-    backgroundColor: '#0D0D0D',
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    alignItems: 'center',
-  },
-  heroLabel: {
-    fontSize: 10,
-    color: '#6B6B6B',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  heroSymbol: {
-    fontSize: 36,
-  },
-  moonEmoji: {
-    fontSize: 36,
-  },
-  heroTitle: {
-    fontFamily: 'Cinzel',
-    fontSize: 14,
-    marginTop: 4,
-    letterSpacing: 1,
-  },
-  heroMeta: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 10,
-    color: '#6B6B6B',
-    marginTop: 2,
-  },
-  heroTime: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 9,
-    color: '#4A4A4A',
-    marginTop: 4,
-  },
-  sectionTitle: {
-    fontFamily: 'Cinzel',
-    fontSize: 14,
-    color: '#E0E0E0',
-    marginTop: 20,
-    marginBottom: 8,
-    letterSpacing: 2,
-  },
-  verdictRow: {
-    gap: 10,
-  },
-  verdictCard: {
-    backgroundColor: '#0D0D0D',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-  },
-  verdictLabel: {
-    fontSize: 10,
-    color: '#6B6B6B',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  verdictPlanetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  verdictSymbol: {
-    fontSize: 28,
-    width: 36,
-    textAlign: 'center',
-  },
-  verdictInfo: {
-    flex: 1,
-  },
-  verdictName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#E0E0E0',
-  },
-  verdictSign: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 12,
-    color: '#6B6B6B',
-    marginTop: 1,
-  },
-  verdictScore: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  verdictInterpretation: {
-    fontSize: 11,
-    color: '#6B6B6B',
-    marginTop: 8,
-    fontStyle: 'italic',
-    lineHeight: 16,
-  },
-  partsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-    marginTop: 16,
-  },
-  partBadge: {
-    backgroundColor: '#0D0D0D',
-    borderWidth: 1,
-    borderColor: '#1A1A1A',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    alignItems: 'center',
-  },
-  partName: {
-    fontSize: 10,
-    color: '#6B6B6B',
-    marginBottom: 2,
-  },
-  partValue: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 13,
-    color: '#E0E0E0',
-  },
-  quickGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
+  aspectSymbols: { fontSize: 18, color: '#D4AF37', width: 70, textAlign: 'center' },
+  aspectInfo: { flex: 1 },
+  aspectType: { fontSize: 13, fontWeight: '600', color: '#E0E0E0' },
+  aspectOrb: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 2 },
+
+  sectionTitle: { fontFamily: 'Cinzel', fontSize: 14, color: '#E0E0E0', marginTop: 20, marginBottom: 8, letterSpacing: 2 },
+
+  // Verdict
+  verdictRow: { gap: 10 },
+  verdictCard: { backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 12, padding: 14 },
+  verdictLabel: { fontSize: 10, color: '#6B6B6B', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 },
+  verdictPlanetRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  verdictSymbol: { fontSize: 28, width: 36, textAlign: 'center' },
+  verdictInfoCol: { flex: 1 },
+  verdictName: { fontSize: 16, fontWeight: '600', color: '#E0E0E0' },
+  verdictSign: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', marginTop: 1 },
+  verdictScore: { fontFamily: 'JetBrainsMono', fontSize: 22, fontWeight: '700' },
+  verdictInterpretation: { fontSize: 11, color: '#6B6B6B', marginTop: 8, fontStyle: 'italic', lineHeight: 16 },
+
+  // Quick Actions
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   quickCard: {
-    width: (SCREEN_WIDTH - 42) / 2,
-    backgroundColor: '#0D0D0D',
-    borderWidth: 1,
-    borderColor: '#1A1A1A',
-    borderRadius: 12,
-    paddingVertical: 18,
-    alignItems: 'center',
-    gap: 6,
+    width: (SCREEN_WIDTH - 42) / 2, backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
+    borderRadius: 12, paddingVertical: 18, alignItems: 'center', gap: 6,
   },
-  quickIcon: {
-    fontSize: 28,
+  quickIcon: { fontSize: 28 },
+  quickLabel: { fontSize: 12, color: '#E0E0E0', fontWeight: '600', letterSpacing: 0.5 },
+
+  // Event Horizon
+  eventSection: { marginTop: 8 },
+  eventHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0D0D0D',
+    borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, gap: 8,
   },
-  quickLabel: {
-    fontSize: 12,
-    color: '#E0E0E0',
-    fontWeight: '600',
-    letterSpacing: 0.5,
+  searchIcon: { fontSize: 16 },
+  searchInput: { flex: 1, fontSize: 14, color: '#E0E0E0', padding: 0 },
+  eventCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0D0D0D',
+    borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 10, padding: 12, marginTop: 6, gap: 10,
   },
-  dayRulerCard: {
-    backgroundColor: '#0D0D0D',
-    borderWidth: 1,
-    borderColor: '#1A1A1A',
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 16,
-    alignItems: 'center',
+  eventType: { fontSize: 20, width: 30, textAlign: 'center' },
+  eventInfo: { flex: 1 },
+  eventTitle: { fontSize: 13, fontWeight: '600', color: '#E0E0E0' },
+  eventDate: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 2 },
+
+  // Locked feature
+  lockedCard: {
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#D4AF3720',
+    borderRadius: 12, padding: 20, alignItems: 'center', gap: 8,
   },
-  dayRulerLabel: {
-    fontSize: 10,
-    color: '#6B6B6B',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  dayRulerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  dayRulerSymbol: {
-    fontSize: 24,
-  },
-  dayRulerName: {
-    fontFamily: 'Cinzel',
-    fontSize: 16,
-    color: '#E0E0E0',
-    letterSpacing: 2,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#E0E0E0',
-  },
-  loadingSubtext: {
-    fontSize: 24,
-    color: '#D4AF37',
-    marginTop: 12,
-    letterSpacing: 8,
-  },
+  lockedIcon: { fontSize: 28 },
+  lockedText: { fontSize: 12, color: '#6B6B6B', textAlign: 'center', lineHeight: 18 },
+
+  // Arabic Parts
+  partsRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 16 },
+  partBadge: { backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, alignItems: 'center' },
+  partName: { fontSize: 10, color: '#6B6B6B', marginBottom: 2 },
+  partValue: { fontFamily: 'JetBrainsMono', fontSize: 13, color: '#E0E0E0' },
+
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { fontSize: 16, color: '#E0E0E0' },
+  loadingSubtext: { fontSize: 24, color: '#D4AF37', marginTop: 12, letterSpacing: 8 },
 });

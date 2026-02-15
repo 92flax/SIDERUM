@@ -1,11 +1,14 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Text, View, StyleSheet, FlatList, Platform, Pressable } from 'react-native';
+import { Text, View, StyleSheet, FlatList, Platform, Pressable, ScrollView, Dimensions } from 'react-native';
 import { Magnetometer, Accelerometer } from 'expo-sensors';
 import * as Haptics from 'expo-haptics';
 import { ScreenContainer } from '@/components/screen-container';
+import { HoloPad } from '@/components/holo-pad';
 import { useRitualStore } from '@/lib/ritual/store';
 import { calculateHeading, isAlignedToDirection, detectTracingMotion } from '@/lib/compass/sensor-fusion';
 import { Ritual, RitualStep } from '@/lib/ritual/types';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function SanctumScreen() {
   const rituals = useRitualStore((s) => s.rituals);
@@ -26,13 +29,11 @@ export default function SanctumScreen() {
   const accHistoryRef = useRef<Array<{ x: number; y: number; z: number; timestamp: number }>>([]);
   const alignedRef = useRef(false);
 
-  useEffect(() => {
-    loadRituals();
-  }, []);
+  useEffect(() => { loadRituals(); }, []);
 
   // Sensor subscriptions for compass lock and tracing
   useEffect(() => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === ('web' as string)) return;
     if (playerState !== 'compass_lock' && playerState !== 'tracing') return;
 
     let magSub: any;
@@ -42,8 +43,6 @@ export default function SanctumScreen() {
     magSub = Magnetometer.addListener((data) => {
       const h = calculateHeading(data.x, data.y);
       setHeading(h);
-
-      // Check compass alignment
       const step = useRitualStore.getState().getCurrentStep();
       if (step?.compass_direction && !alignedRef.current) {
         const aligned = isAlignedToDirection(h, step.compass_direction);
@@ -78,7 +77,7 @@ export default function SanctumScreen() {
   }, [playerState, currentStepIndex]);
 
   const handleNextStep = useCallback(() => {
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== ('web' as string)) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     alignedRef.current = false;
@@ -86,14 +85,16 @@ export default function SanctumScreen() {
   }, [nextStep]);
 
   const handlePrevStep = useCallback(() => {
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== ('web' as string)) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     alignedRef.current = false;
     prevStep();
   }, [prevStep]);
 
+  // ==========================================
   // Ritual Selection Screen
+  // ==========================================
   if (!currentRitual || playerState === 'idle') {
     return (
       <ScreenContainer>
@@ -110,7 +111,7 @@ export default function SanctumScreen() {
               </Text>
               <Pressable
                 onPress={() => {
-                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   startRitual();
                 }}
                 style={({ pressed }) => [styles.startBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
@@ -127,7 +128,7 @@ export default function SanctumScreen() {
             renderItem={({ item }) => (
               <Pressable
                 onPress={() => {
-                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   selectRitual(item.id);
                 }}
                 style={({ pressed }) => [styles.ritualCard, pressed && { opacity: 0.7 }]}
@@ -146,7 +147,9 @@ export default function SanctumScreen() {
     );
   }
 
+  // ==========================================
   // Ritual Completed Screen
+  // ==========================================
   if (playerState === 'completed') {
     return (
       <ScreenContainer>
@@ -159,7 +162,7 @@ export default function SanctumScreen() {
           </Text>
           <Pressable
             onPress={() => {
-              if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              if (Platform.OS !== ('web' as string)) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               resetRitual();
             }}
             style={({ pressed }) => [styles.startBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
@@ -171,11 +174,23 @@ export default function SanctumScreen() {
     );
   }
 
-  // Active Ritual Player
+  // ==========================================
+  // Active Ritual Player – Holo-Pad Split-Screen
+  // ==========================================
   const currentStep = currentRitual.steps[currentStepIndex];
   const progress = ((currentStepIndex + 1) / currentRitual.steps.length) * 100;
   const needsCompass = !!currentStep?.compass_direction;
-  const needsTracing = currentStep?.action_type === 'TRACE';
+  const hasTracingShape = !!currentStep?.ar_element;
+  const isTracingStep = currentStep?.action_type === 'TRACE';
+  const isTracingDetected = useRitualStore.getState().isTracingDetected;
+
+  // Check if next step is a TRACE step (for combined view)
+  const nextStepData = currentRitual.steps[currentStepIndex + 1];
+  const nextIsTrace = nextStepData?.action_type === 'TRACE';
+  const showHoloPad = hasTracingShape || isTracingStep || nextIsTrace;
+
+  // Get the shape to display (from current step or next step)
+  const shapeData = currentStep?.ar_element || nextStepData?.ar_element;
 
   const actionTypeColors: Record<string, string> = {
     MOVEMENT: '#3B82F6',
@@ -187,6 +202,11 @@ export default function SanctumScreen() {
 
   const actionColor = actionTypeColors[currentStep?.action_type ?? 'MOVEMENT'] ?? '#6B6B6B';
 
+  const canAdvance = !(
+    (playerState === 'compass_lock' && !isDirectionLocked) ||
+    (playerState === 'tracing' && !isTracingDetected)
+  );
+
   return (
     <ScreenContainer>
       <View style={styles.playerContainer}>
@@ -195,86 +215,80 @@ export default function SanctumScreen() {
           <View style={[styles.progressFill, { width: `${progress}%` }]} />
         </View>
 
-        {/* Step counter */}
         <Text style={styles.stepCounter}>
           Step {currentStepIndex + 1} of {currentRitual.steps.length}
         </Text>
 
-        {/* Compass direction indicator */}
-        {needsCompass && (
-          <View style={styles.compassLock}>
-            <Text style={[styles.compassDirection, isDirectionLocked && styles.compassAligned]}>
-              {isDirectionLocked ? '✓' : '⟳'} Face {currentStep.compass_direction}
-            </Text>
-            {!isDirectionLocked && (
-              <Text style={styles.compassHint}>
-                {Platform.OS === 'web'
-                  ? 'Tap to simulate alignment'
-                  : `Heading: ${heading.toFixed(0)}° — Align to ${currentStep.compass_direction}`}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.playerContent}
+        >
+          {/* ===== TOP SECTION: Instruction Card (40%) ===== */}
+          <View style={styles.instructionSection}>
+            {/* Compass direction indicator */}
+            {needsCompass && (
+              <View style={styles.compassLock}>
+                <Text style={[styles.compassDirection, isDirectionLocked && styles.compassAligned]}>
+                  {isDirectionLocked ? '✓' : '⟳'} Face {currentStep.compass_direction}
+                </Text>
+                {!isDirectionLocked && (
+                  <Text style={styles.compassHint}>
+                    {Platform.OS === ('web' as string)
+                      ? 'Tap to simulate alignment'
+                      : `Heading: ${heading.toFixed(0)}° — Align to ${currentStep.compass_direction}`}
+                  </Text>
+                )}
+                {Platform.OS === ('web' as string) && !isDirectionLocked && (
+                  <Pressable
+                    onPress={() => setDirectionLocked(true)}
+                    style={({ pressed }) => [styles.simBtn, pressed && { opacity: 0.7 }]}
+                  >
+                    <Text style={styles.simBtnText}>Simulate Alignment</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+
+            {/* Action type badge */}
+            <View style={[styles.actionBadge, { borderColor: actionColor }]}>
+              <Text style={[styles.actionType, { color: actionColor }]}>
+                {currentStep?.action_type}
               </Text>
-            )}
-            {Platform.OS === 'web' && !isDirectionLocked && (
-              <Pressable
-                onPress={() => setDirectionLocked(true)}
-                style={({ pressed }) => [styles.simBtn, pressed && { opacity: 0.7 }]}
-              >
-                <Text style={styles.simBtnText}>Simulate Alignment</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
+            </View>
 
-        {/* Tracing indicator */}
-        {needsTracing && isDirectionLocked && (
-          <View style={styles.tracingBox}>
-            <Text style={styles.tracingText}>
-              {Platform.OS === 'web' ? 'Tap to simulate trace' : 'Trace the shape with your device'}
-            </Text>
-            {Platform.OS === 'web' && (
-              <Pressable
-                onPress={() => setTracingDetected(true)}
-                style={({ pressed }) => [styles.simBtn, pressed && { opacity: 0.7 }]}
-              >
-                <Text style={styles.simBtnText}>Simulate Trace</Text>
-              </Pressable>
+            {/* Main instruction */}
+            <View style={styles.instructionBox}>
+              <Text style={styles.instructionText}>
+                {currentStep?.instruction_text}
+              </Text>
+            </View>
+
+            {/* Vibration word */}
+            {currentStep?.audio_vibration && (
+              <View style={styles.vibrationBox}>
+                <Text style={styles.vibrationWord}>
+                  {currentStep.audio_vibration.word}
+                </Text>
+                <Text style={styles.vibrationPhonetic}>
+                  {currentStep.audio_vibration.phonetic}
+                </Text>
+              </View>
             )}
           </View>
-        )}
 
-        {/* Action type badge */}
-        <View style={[styles.actionBadge, { borderColor: actionColor }]}>
-          <Text style={[styles.actionType, { color: actionColor }]}>
-            {currentStep?.action_type}
-          </Text>
-        </View>
-
-        {/* Main instruction */}
-        <View style={styles.instructionBox}>
-          <Text style={styles.instructionText}>
-            {currentStep?.instruction_text}
-          </Text>
-        </View>
-
-        {/* Vibration word */}
-        {currentStep?.audio_vibration && (
-          <View style={styles.vibrationBox}>
-            <Text style={styles.vibrationWord}>
-              {currentStep.audio_vibration.word}
-            </Text>
-            <Text style={styles.vibrationPhonetic}>
-              {currentStep.audio_vibration.phonetic}
-            </Text>
-          </View>
-        )}
-
-        {/* AR Element indicator */}
-        {currentStep?.ar_element && (
-          <View style={[styles.arBadge, { borderColor: currentStep.ar_element.color_hex }]}>
-            <Text style={[styles.arText, { color: currentStep.ar_element.color_hex }]}>
-              ◇ {currentStep.ar_element.shape}
-            </Text>
-          </View>
-        )}
+          {/* ===== BOTTOM SECTION: Holo-Pad (60%) ===== */}
+          {showHoloPad && shapeData && (
+            <View style={styles.holoPadSection}>
+              <Text style={styles.holoPadLabel}>Holo-Pad</Text>
+              <HoloPad
+                shape={shapeData.shape}
+                colorHex={shapeData.color_hex}
+                isTraced={isTracingStep ? isTracingDetected : false}
+                onSimulateTrace={isTracingStep ? () => setTracingDetected(true) : undefined}
+              />
+            </View>
+          )}
+        </ScrollView>
 
         {/* Navigation buttons */}
         <View style={styles.navRow}>
@@ -294,15 +308,11 @@ export default function SanctumScreen() {
 
           <Pressable
             onPress={handleNextStep}
-            disabled={
-              (playerState === 'compass_lock' && !isDirectionLocked) ||
-              (playerState === 'tracing' && !useRitualStore.getState().isTracingDetected)
-            }
+            disabled={!canAdvance}
             style={({ pressed }) => [
               styles.navBtn,
               styles.navBtnNext,
-              ((playerState === 'compass_lock' && !isDirectionLocked) ||
-                (playerState === 'tracing' && !useRitualStore.getState().isTracingDetected)) && styles.navBtnDisabled,
+              !canAdvance && styles.navBtnDisabled,
               pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
             ]}
           >
@@ -314,9 +324,7 @@ export default function SanctumScreen() {
 
         {/* Exit button */}
         <Pressable
-          onPress={() => {
-            resetRitual();
-          }}
+          onPress={() => resetRitual()}
           style={({ pressed }) => [styles.exitBtn, pressed && { opacity: 0.7 }]}
         >
           <Text style={styles.exitBtnText}>Exit Ritual</Text>
@@ -327,302 +335,93 @@ export default function SanctumScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  title: {
-    fontFamily: 'Cinzel',
-    fontSize: 28,
-    color: '#D4AF37',
-    textAlign: 'center',
-    letterSpacing: 4,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#6B6B6B',
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  sectionTitle: {
-    fontFamily: 'Cinzel',
-    fontSize: 16,
-    color: '#E0E0E0',
-    marginTop: 24,
-    marginBottom: 8,
-    letterSpacing: 2,
-  },
+  container: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
+  title: { fontFamily: 'Cinzel', fontSize: 28, color: '#D4AF37', textAlign: 'center', letterSpacing: 4 },
+  subtitle: { fontSize: 13, color: '#6B6B6B', textAlign: 'center', marginTop: 4 },
+  sectionTitle: { fontFamily: 'Cinzel', fontSize: 16, color: '#E0E0E0', marginTop: 24, marginBottom: 8, letterSpacing: 2 },
   selectedRitual: {
-    backgroundColor: '#0D0D0D',
-    borderWidth: 1,
-    borderColor: '#D4AF3740',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#D4AF3740',
+    borderRadius: 12, padding: 16, marginTop: 16,
   },
-  ritualName: {
-    fontFamily: 'Cinzel',
-    fontSize: 16,
-    color: '#D4AF37',
-  },
-  ritualDesc: {
-    fontSize: 13,
-    color: '#E0E0E0',
-    marginTop: 8,
-    lineHeight: 20,
-  },
-  ritualMeta: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 11,
-    color: '#6B6B6B',
-    marginTop: 8,
-  },
+  ritualName: { fontFamily: 'Cinzel', fontSize: 16, color: '#D4AF37' },
+  ritualDesc: { fontSize: 13, color: '#E0E0E0', marginTop: 8, lineHeight: 20 },
+  ritualMeta: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 8 },
   startBtn: {
-    backgroundColor: '#D4AF37',
-    borderRadius: 24,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 16,
+    backgroundColor: '#D4AF37', borderRadius: 24, paddingVertical: 12,
+    alignItems: 'center', marginTop: 16,
   },
-  startBtnText: {
-    color: '#050505',
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  ritualList: {
-    paddingBottom: 100,
-  },
+  startBtnText: { color: '#050505', fontSize: 15, fontWeight: '700', letterSpacing: 1 },
+  ritualList: { paddingBottom: 100 },
   ritualCard: {
-    backgroundColor: '#0D0D0D',
-    borderWidth: 1,
-    borderColor: '#1A1A1A',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
+    borderRadius: 12, padding: 14, marginBottom: 8,
   },
-  ritualCardName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#E0E0E0',
-  },
-  ritualCardDesc: {
-    fontSize: 12,
-    color: '#6B6B6B',
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  ritualCardMeta: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 10,
-    color: '#6B6B6B',
-    marginTop: 6,
-  },
+  ritualCardName: { fontSize: 15, fontWeight: '600', color: '#E0E0E0' },
+  ritualCardDesc: { fontSize: 12, color: '#6B6B6B', marginTop: 4, lineHeight: 18 },
+  ritualCardMeta: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', marginTop: 6 },
+
   // Player styles
-  playerContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  progressBar: {
-    height: 3,
-    backgroundColor: '#1A1A1A',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#D4AF37',
-    borderRadius: 2,
-  },
-  stepCounter: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 12,
-    color: '#6B6B6B',
-    textAlign: 'center',
-    marginTop: 8,
-  },
+  playerContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
+  playerContent: { paddingBottom: 16 },
+  progressBar: { height: 3, backgroundColor: '#1A1A1A', borderRadius: 2, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: '#D4AF37', borderRadius: 2 },
+  stepCounter: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', textAlign: 'center', marginTop: 8 },
+
+  // Instruction section (top 40%)
+  instructionSection: { marginTop: 8 },
   compassLock: {
-    backgroundColor: '#0055A415',
-    borderWidth: 1,
-    borderColor: '#0055A440',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 12,
-    alignItems: 'center',
+    backgroundColor: '#0055A415', borderWidth: 1, borderColor: '#0055A440',
+    borderRadius: 12, padding: 14, alignItems: 'center',
   },
-  compassDirection: {
-    fontFamily: 'Cinzel',
-    fontSize: 20,
-    color: '#0055A4',
-  },
-  compassAligned: {
-    color: '#22C55E',
-  },
-  compassHint: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 11,
-    color: '#6B6B6B',
-    marginTop: 4,
-  },
-  simBtn: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginTop: 8,
-  },
-  simBtnText: {
-    fontSize: 12,
-    color: '#E0E0E0',
-  },
-  tracingBox: {
-    backgroundColor: '#EF444415',
-    borderWidth: 1,
-    borderColor: '#EF444440',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 8,
-    alignItems: 'center',
-  },
-  tracingText: {
-    fontSize: 13,
-    color: '#EF4444',
-  },
+  compassDirection: { fontFamily: 'Cinzel', fontSize: 18, color: '#0055A4' },
+  compassAligned: { color: '#22C55E' },
+  compassHint: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 4 },
+  simBtn: { backgroundColor: '#1A1A1A', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
+  simBtnText: { fontSize: 12, color: '#E0E0E0' },
   actionBadge: {
-    alignSelf: 'center',
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    marginTop: 16,
+    alignSelf: 'center', borderWidth: 1, borderRadius: 6,
+    paddingHorizontal: 12, paddingVertical: 4, marginTop: 12,
   },
-  actionType: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
+  actionType: { fontFamily: 'JetBrainsMono', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   instructionBox: {
-    backgroundColor: '#0D0D0D',
-    borderWidth: 1,
-    borderColor: '#1A1A1A',
-    borderRadius: 12,
-    padding: 20,
-    marginTop: 16,
-    minHeight: 100,
-    justifyContent: 'center',
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
+    borderRadius: 12, padding: 16, marginTop: 12, minHeight: 80, justifyContent: 'center',
   },
-  instructionText: {
-    fontSize: 16,
-    color: '#E0E0E0',
-    lineHeight: 26,
-    textAlign: 'center',
-  },
+  instructionText: { fontSize: 15, color: '#E0E0E0', lineHeight: 24, textAlign: 'center' },
   vibrationBox: {
-    backgroundColor: '#D4AF3710',
-    borderWidth: 1,
-    borderColor: '#D4AF3730',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 12,
-    alignItems: 'center',
+    backgroundColor: '#D4AF3710', borderWidth: 1, borderColor: '#D4AF3730',
+    borderRadius: 12, padding: 14, marginTop: 10, alignItems: 'center',
   },
-  vibrationWord: {
-    fontFamily: 'Cinzel',
-    fontSize: 24,
-    color: '#D4AF37',
-    letterSpacing: 2,
+  vibrationWord: { fontFamily: 'Cinzel', fontSize: 22, color: '#D4AF37', letterSpacing: 2 },
+  vibrationPhonetic: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', marginTop: 4 },
+
+  // Holo-Pad section (bottom 60%)
+  holoPadSection: {
+    marginTop: 16, alignItems: 'center',
   },
-  vibrationPhonetic: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 13,
-    color: '#6B6B6B',
-    marginTop: 4,
+  holoPadLabel: {
+    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B',
+    letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8,
   },
-  arBadge: {
-    alignSelf: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    marginTop: 12,
-  },
-  arText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  navRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    gap: 12,
-  },
+
+  // Navigation
+  navRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, gap: 12 },
   navBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#1A1A1A',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
+    flex: 1, borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 12,
+    paddingVertical: 14, alignItems: 'center',
   },
-  navBtnDisabled: {
-    opacity: 0.3,
-  },
-  navBtnText: {
-    fontSize: 14,
-    color: '#E0E0E0',
-  },
-  navBtnTextDisabled: {
-    color: '#6B6B6B',
-  },
-  navBtnNext: {
-    backgroundColor: '#D4AF37',
-    borderColor: '#D4AF37',
-  },
-  navBtnNextText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#050505',
-  },
-  exitBtn: {
-    alignSelf: 'center',
-    marginTop: 16,
-    paddingVertical: 8,
-  },
-  exitBtnText: {
-    fontSize: 13,
-    color: '#6B6B6B',
-  },
+  navBtnDisabled: { opacity: 0.3 },
+  navBtnText: { fontSize: 14, color: '#E0E0E0' },
+  navBtnTextDisabled: { color: '#6B6B6B' },
+  navBtnNext: { backgroundColor: '#D4AF37', borderColor: '#D4AF37' },
+  navBtnNextText: { fontSize: 14, fontWeight: '700', color: '#050505' },
+  exitBtn: { alignSelf: 'center', marginTop: 12, paddingVertical: 8 },
+  exitBtnText: { fontSize: 13, color: '#6B6B6B' },
+
   // Completed
-  completedContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  completedSymbol: {
-    fontSize: 48,
-    color: '#D4AF37',
-  },
-  completedTitle: {
-    fontFamily: 'Cinzel',
-    fontSize: 24,
-    color: '#D4AF37',
-    marginTop: 16,
-    letterSpacing: 3,
-  },
-  completedName: {
-    fontSize: 15,
-    color: '#E0E0E0',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  completedText: {
-    fontSize: 13,
-    color: '#6B6B6B',
-    marginTop: 8,
-    textAlign: 'center',
-  },
+  completedContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  completedSymbol: { fontSize: 48, color: '#D4AF37' },
+  completedTitle: { fontFamily: 'Cinzel', fontSize: 24, color: '#D4AF37', marginTop: 16, letterSpacing: 3 },
+  completedName: { fontSize: 15, color: '#E0E0E0', marginTop: 8, textAlign: 'center' },
+  completedText: { fontSize: 13, color: '#6B6B6B', marginTop: 8, textAlign: 'center' },
 });

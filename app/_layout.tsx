@@ -20,6 +20,7 @@ import * as SplashScreen from "expo-splash-screen";
 
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
+import { useProStore } from "@/lib/store/pro-store";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -46,6 +47,11 @@ export default function RootLayout() {
   // Initialize Manus runtime for cookie injection from parent container
   useEffect(() => {
     initManusRuntime();
+  }, []);
+
+  // Load subscription state
+  useEffect(() => {
+    useProStore.getState().loadSubscription();
   }, []);
 
   useEffect(() => {

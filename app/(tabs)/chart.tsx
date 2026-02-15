@@ -1,7 +1,10 @@
-import { useCallback } from 'react';
-import { Text, View, StyleSheet, FlatList } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Text, View, StyleSheet, FlatList, Pressable } from 'react-native';
 import { ScreenContainer } from '@/components/screen-container';
+import { PaywallModal, ProBadge } from '@/components/paywall-modal';
 import { useAstroStore } from '@/lib/astro/store';
+import { useProStore } from '@/lib/store/pro-store';
+import { getMajorAspects, Aspect } from '@/lib/astro/aspects';
 import {
   PLANET_SYMBOLS, ZODIAC_SYMBOLS, PLANET_COLORS, Planet,
   PlanetPosition, EssentialDignity, PlanetCondition,
@@ -23,8 +26,28 @@ function getScoreVerdict(score: number): { text: string; color: string } {
   return { text: 'Extreme debility. Avoid ritual work if possible.', color: '#EF4444' };
 }
 
+function getAspectColor(type: string): string {
+  switch (type) {
+    case 'Conjunction': return '#D4AF37';
+    case 'Trine': return '#22C55E';
+    case 'Sextile': return '#3B82F6';
+    case 'Square': return '#EF4444';
+    case 'Opposition': return '#F59E0B';
+    default: return '#6B6B6B';
+  }
+}
+
 export default function ChartScreen() {
   const chartData = useAstroStore((s) => s.chartData);
+  const isFeatureUnlocked = useProStore((s) => s.isFeatureUnlocked);
+  const [showAspectarian, setShowAspectarian] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  // Calculate aspects
+  const aspects = useMemo(() => {
+    if (!chartData) return [];
+    return getMajorAspects(chartData.planets, 3);
+  }, [chartData]);
 
   if (!chartData) {
     return (
@@ -37,7 +60,15 @@ export default function ChartScreen() {
     );
   }
 
-  const renderPlanetDetail = useCallback(({ item }: { item: PlanetPosition }) => {
+  const handleAspectarianToggle = () => {
+    if (!isFeatureUnlocked('aspectarian')) {
+      setShowPaywall(true);
+      return;
+    }
+    setShowAspectarian(!showAspectarian);
+  };
+
+  const renderPlanetDetail = ({ item }: { item: PlanetPosition }) => {
     const dignity = chartData.dignities[item.planet];
     const condition = chartData.conditions[item.planet];
     const color = PLANET_COLORS[item.planet];
@@ -54,7 +85,6 @@ export default function ChartScreen() {
     if (dignity.fall) activeDignities.push({ label: 'Fall', positive: false });
     if (dignity.peregrine) activeDignities.push({ label: 'Peregrine', positive: false });
 
-    // Collect only ACTIVE conditions
     // BUG FIX: Combust/Under Beams/Cazimi never appear for the Sun itself
     const activeConditions: Array<{ label: string; icon: string; positive: boolean }> = [];
     if (condition.isRetrograde) activeConditions.push({ label: 'Retrograde', icon: '℞', positive: false });
@@ -87,19 +117,16 @@ export default function ChartScreen() {
           <Text style={[styles.verdictText, { color: verdict.color }]}>{verdict.text}</Text>
         </View>
 
-        {/* Active Dignity Tags (only show active ones) */}
+        {/* Active Dignity Tags */}
         {hasAnyTag && (
           <View style={styles.tagGrid}>
             {activeDignities.map(({ label, positive }) => (
               <View
                 key={label}
-                style={[
-                  styles.tag,
-                  {
-                    borderColor: positive ? '#22C55E40' : '#EF444440',
-                    backgroundColor: positive ? '#22C55E10' : '#EF444410',
-                  },
-                ]}
+                style={[styles.tag, {
+                  borderColor: positive ? '#22C55E40' : '#EF444440',
+                  backgroundColor: positive ? '#22C55E10' : '#EF444410',
+                }]}
               >
                 <Text style={[styles.tagText, { color: positive ? '#22C55E' : '#EF4444' }]}>
                   {label}
@@ -111,10 +138,7 @@ export default function ChartScreen() {
               return (
                 <View
                   key={label}
-                  style={[
-                    styles.tag,
-                    { borderColor: condColor + '40', backgroundColor: condColor + '10' },
-                  ]}
+                  style={[styles.tag, { borderColor: condColor + '40', backgroundColor: condColor + '10' }]}
                 >
                   <Text style={[styles.tagText, { color: condColor }]}>{icon} {label}</Text>
                 </View>
@@ -150,7 +174,7 @@ export default function ChartScreen() {
         </View>
       </View>
     );
-  }, [chartData]);
+  };
 
   const planets = chartData.planets.filter(p => MAIN_PLANETS.includes(p.planet));
 
@@ -161,159 +185,148 @@ export default function ChartScreen() {
         keyExtractor={(item) => item.planet}
         renderItem={renderPlanetDetail}
         ListHeaderComponent={
-          <View style={styles.header}>
-            <Text style={styles.title}>Chart Detail</Text>
-            <Text style={styles.subtitle}>
-              Essential Dignities & Conditions
-            </Text>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaText}>
-                JD {chartData.julianDay.toFixed(4)}
-              </Text>
-              <Text style={styles.metaText}>
-                LST {chartData.localSiderealTime.toFixed(4)}h
-              </Text>
+          <View>
+            <View style={styles.header}>
+              <Text style={styles.title}>Chart Detail</Text>
+              <Text style={styles.subtitle}>Essential Dignities & Conditions</Text>
+              <View style={styles.metaRow}>
+                <Text style={styles.metaText}>JD {chartData.julianDay.toFixed(4)}</Text>
+                <Text style={styles.metaText}>LST {chartData.localSiderealTime.toFixed(4)}h</Text>
+              </View>
+            </View>
+
+            {/* ===== Aspectarian (Collapsible) ===== */}
+            <View style={styles.aspectarianSection}>
+              <Pressable
+                onPress={handleAspectarianToggle}
+                style={({ pressed }) => [styles.aspectarianHeader, pressed && { opacity: 0.8 }]}
+              >
+                <View style={styles.aspectarianTitleRow}>
+                  <Text style={styles.aspectarianTitle}>Aspectarian</Text>
+                  {!isFeatureUnlocked('aspectarian') && (
+                    <ProBadge onPress={() => setShowPaywall(true)} />
+                  )}
+                </View>
+                <Text style={styles.aspectarianToggle}>
+                  {showAspectarian ? '▼' : '▶'} {aspects.length} aspects
+                </Text>
+              </Pressable>
+
+              {showAspectarian && isFeatureUnlocked('aspectarian') && (
+                <View style={styles.aspectarianBody}>
+                  {aspects.length === 0 ? (
+                    <Text style={styles.noAspects}>No major aspects within 3° orb</Text>
+                  ) : (
+                    aspects.map((asp, i) => {
+                      const aspColor = getAspectColor(asp.type);
+                      return (
+                        <View key={i} style={[styles.aspectRow, asp.isExact && styles.aspectRowExact]}>
+                          <View style={styles.aspectPlanets}>
+                            <Text style={[styles.aspectPlanetSymbol, { color: PLANET_COLORS[asp.planet1] }]}>
+                              {PLANET_SYMBOLS[asp.planet1]}
+                            </Text>
+                            <Text style={[styles.aspectSymbol, { color: aspColor }]}>{asp.symbol}</Text>
+                            <Text style={[styles.aspectPlanetSymbol, { color: PLANET_COLORS[asp.planet2] }]}>
+                              {PLANET_SYMBOLS[asp.planet2]}
+                            </Text>
+                          </View>
+                          <View style={styles.aspectDetail}>
+                            <Text style={[styles.aspectTypeName, { color: aspColor }]}>{asp.type}</Text>
+                            <Text style={styles.aspectPairName}>
+                              {asp.planet1} – {asp.planet2}
+                            </Text>
+                          </View>
+                          <View style={styles.aspectOrbCol}>
+                            <Text style={[styles.aspectOrbValue, asp.isExact && { color: '#D4AF37' }]}>
+                              {asp.orb.toFixed(1)}°
+                            </Text>
+                            {asp.isExact && (
+                              <Text style={styles.exactLabel}>EXACT</Text>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              )}
             </View>
           </View>
         }
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
       />
+
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        featureId="aspectarian"
+      />
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
+  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
+  title: { fontFamily: 'Cinzel', fontSize: 24, color: '#D4AF37', textAlign: 'center', letterSpacing: 3 },
+  subtitle: { fontSize: 13, color: '#6B6B6B', textAlign: 'center', marginTop: 4 },
+  metaRow: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 8 },
+  metaText: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B' },
+  list: { paddingBottom: 100 },
+
+  // Aspectarian
+  aspectarianSection: { marginHorizontal: 16, marginBottom: 8 },
+  aspectarianHeader: {
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
+    borderRadius: 12, padding: 14,
   },
-  title: {
-    fontFamily: 'Cinzel',
-    fontSize: 24,
-    color: '#D4AF37',
-    textAlign: 'center',
-    letterSpacing: 3,
+  aspectarianTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  aspectarianTitle: { fontFamily: 'Cinzel', fontSize: 16, color: '#E0E0E0', letterSpacing: 2 },
+  aspectarianToggle: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 4 },
+  aspectarianBody: {
+    backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: '#1A1A1A',
+    borderTopWidth: 0, borderBottomLeftRadius: 12, borderBottomRightRadius: 12, padding: 8,
   },
-  subtitle: {
-    fontSize: 13,
-    color: '#6B6B6B',
-    textAlign: 'center',
-    marginTop: 4,
+  noAspects: { fontSize: 12, color: '#6B6B6B', textAlign: 'center', padding: 16 },
+  aspectRow: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 8,
+    paddingHorizontal: 8, borderRadius: 8, marginBottom: 2,
   },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    marginTop: 8,
-  },
-  metaText: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 10,
-    color: '#6B6B6B',
-  },
-  list: {
-    paddingBottom: 100,
-  },
+  aspectRowExact: { backgroundColor: '#D4AF3708', borderWidth: 1, borderColor: '#D4AF3720' },
+  aspectPlanets: { flexDirection: 'row', alignItems: 'center', gap: 4, width: 70 },
+  aspectPlanetSymbol: { fontSize: 16 },
+  aspectSymbol: { fontSize: 14 },
+  aspectDetail: { flex: 1, marginLeft: 8 },
+  aspectTypeName: { fontSize: 12, fontWeight: '700' },
+  aspectPairName: { fontSize: 10, color: '#6B6B6B', marginTop: 1 },
+  aspectOrbCol: { alignItems: 'flex-end' },
+  aspectOrbValue: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#E0E0E0' },
+  exactLabel: { fontFamily: 'JetBrainsMono', fontSize: 8, color: '#D4AF37', letterSpacing: 1, marginTop: 1 },
+
+  // Planet detail cards
   detailCard: {
-    backgroundColor: '#0D0D0D',
-    borderWidth: 1,
-    borderColor: '#1A1A1A',
-    borderRadius: 12,
-    padding: 14,
-    marginHorizontal: 16,
-    marginVertical: 4,
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
+    borderRadius: 12, padding: 14, marginHorizontal: 16, marginVertical: 4,
   },
-  detailHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  planetSymbol: {
-    fontSize: 28,
-    width: 36,
-    textAlign: 'center',
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  planetName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#E0E0E0',
-  },
-  positionText: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 12,
-    color: '#6B6B6B',
-    marginTop: 2,
-  },
-  scoreText: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 18,
-    fontWeight: '700',
-  },
+  detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  planetSymbol: { fontSize: 28, width: 36, textAlign: 'center' },
+  headerInfo: { flex: 1 },
+  planetName: { fontSize: 16, fontWeight: '600', color: '#E0E0E0' },
+  positionText: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', marginTop: 2 },
+  scoreText: { fontFamily: 'JetBrainsMono', fontSize: 18, fontWeight: '700' },
   scorePositive: { color: '#22C55E' },
   scoreNegative: { color: '#EF4444' },
   scoreNeutral: { color: '#6B6B6B' },
-  verdictBox: {
-    marginTop: 10,
-    paddingLeft: 10,
-    borderLeftWidth: 3,
-  },
-  verdictText: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    lineHeight: 18,
-  },
-  tagGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 10,
-  },
-  tag: {
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  tagText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  techRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#1A1A1A',
-  },
+  verdictBox: { marginTop: 10, paddingLeft: 10, borderLeftWidth: 3 },
+  verdictText: { fontSize: 12, fontStyle: 'italic', lineHeight: 18 },
+  tagGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  tag: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  tagText: { fontSize: 10, fontWeight: '700' },
+  techRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#1A1A1A' },
   techItem: {},
-  techLabel: {
-    fontSize: 9,
-    color: '#6B6B6B',
-  },
-  techValue: {
-    fontFamily: 'JetBrainsMono',
-    fontSize: 11,
-    color: '#E0E0E0',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#E0E0E0',
-  },
-  loadingSubtext: {
-    fontSize: 13,
-    color: '#6B6B6B',
-    marginTop: 8,
-  },
+  techLabel: { fontSize: 9, color: '#6B6B6B' },
+  techValue: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#E0E0E0' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { fontSize: 16, color: '#E0E0E0' },
+  loadingSubtext: { fontSize: 13, color: '#6B6B6B', marginTop: 8 },
 });
