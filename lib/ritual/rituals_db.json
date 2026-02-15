@@ -1,0 +1,308 @@
+[
+  {
+    "id": "lbrp",
+    "name": "Lesser Banishing Ritual of the Pentagram",
+    "description": "The foundational banishing ritual of the Western Magical Tradition. Used to purify and protect the ritual space.",
+    "tradition": "Golden Dawn",
+    "steps": [
+      {
+        "order": 1,
+        "action_type": "GESTURE",
+        "instruction_text": "Stand in the center of your space. Take a moment to center yourself. Touch your forehead.",
+        "audio_vibration": {
+          "word": "Ateh",
+          "phonetic": "Ah-teh"
+        }
+      },
+      {
+        "order": 2,
+        "action_type": "GESTURE",
+        "instruction_text": "Touch your chest, pointing downward toward your feet.",
+        "audio_vibration": {
+          "word": "Malkuth",
+          "phonetic": "Mal-kooth"
+        }
+      },
+      {
+        "order": 3,
+        "action_type": "GESTURE",
+        "instruction_text": "Touch your right shoulder.",
+        "audio_vibration": {
+          "word": "Ve-Geburah",
+          "phonetic": "Veh-Geh-boo-rah"
+        }
+      },
+      {
+        "order": 4,
+        "action_type": "GESTURE",
+        "instruction_text": "Touch your left shoulder.",
+        "audio_vibration": {
+          "word": "Ve-Gedulah",
+          "phonetic": "Veh-Geh-doo-lah"
+        }
+      },
+      {
+        "order": 5,
+        "action_type": "GESTURE",
+        "instruction_text": "Clasp your hands upon your breast.",
+        "audio_vibration": {
+          "word": "Le-Olam, Amen",
+          "phonetic": "Leh-Oh-lahm, Ah-men"
+        }
+      },
+      {
+        "order": 6,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the East. Prepare to trace the banishing pentagram.",
+        "compass_direction": "EAST"
+      },
+      {
+        "order": 7,
+        "action_type": "TRACE",
+        "instruction_text": "Trace a banishing Earth pentagram before you in the air. Start from the lower-left hip, trace up to above the head, down to the right hip, up to the left shoulder, across to the right shoulder, and back to the lower-left hip.",
+        "compass_direction": "EAST",
+        "ar_element": {
+          "shape": "Pentagram",
+          "color_hex": "#3B82F6",
+          "position": "EAST"
+        }
+      },
+      {
+        "order": 8,
+        "action_type": "VIBRATION",
+        "instruction_text": "Point to the center of the pentagram and vibrate the Divine Name.",
+        "compass_direction": "EAST",
+        "audio_vibration": {
+          "word": "YHVH",
+          "phonetic": "Yod-Heh-Vav-Heh"
+        }
+      },
+      {
+        "order": 9,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the South. Keep your arm extended, tracing a line of light from East to South.",
+        "compass_direction": "SOUTH"
+      },
+      {
+        "order": 10,
+        "action_type": "TRACE",
+        "instruction_text": "Trace a banishing Earth pentagram before you in the air.",
+        "compass_direction": "SOUTH",
+        "ar_element": {
+          "shape": "Pentagram",
+          "color_hex": "#EF4444",
+          "position": "SOUTH"
+        }
+      },
+      {
+        "order": 11,
+        "action_type": "VIBRATION",
+        "instruction_text": "Point to the center of the pentagram and vibrate the Divine Name.",
+        "compass_direction": "SOUTH",
+        "audio_vibration": {
+          "word": "ADNI",
+          "phonetic": "Ah-doh-nai"
+        }
+      },
+      {
+        "order": 12,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the West. Keep your arm extended, tracing a line of light.",
+        "compass_direction": "WEST"
+      },
+      {
+        "order": 13,
+        "action_type": "TRACE",
+        "instruction_text": "Trace a banishing Earth pentagram before you in the air.",
+        "compass_direction": "WEST",
+        "ar_element": {
+          "shape": "Pentagram",
+          "color_hex": "#3B82F6",
+          "position": "WEST"
+        }
+      },
+      {
+        "order": 14,
+        "action_type": "VIBRATION",
+        "instruction_text": "Point to the center of the pentagram and vibrate the Divine Name.",
+        "compass_direction": "WEST",
+        "audio_vibration": {
+          "word": "AHIH",
+          "phonetic": "Eh-heh-yeh"
+        }
+      },
+      {
+        "order": 15,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the North. Keep your arm extended, tracing a line of light.",
+        "compass_direction": "NORTH"
+      },
+      {
+        "order": 16,
+        "action_type": "TRACE",
+        "instruction_text": "Trace a banishing Earth pentagram before you in the air.",
+        "compass_direction": "NORTH",
+        "ar_element": {
+          "shape": "Pentagram",
+          "color_hex": "#22C55E",
+          "position": "NORTH"
+        }
+      },
+      {
+        "order": 17,
+        "action_type": "VIBRATION",
+        "instruction_text": "Point to the center of the pentagram and vibrate the Divine Name.",
+        "compass_direction": "NORTH",
+        "audio_vibration": {
+          "word": "AGLA",
+          "phonetic": "Ah-geh-lah"
+        }
+      },
+      {
+        "order": 18,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Return to face the East, completing the circle of light.",
+        "compass_direction": "EAST"
+      },
+      {
+        "order": 19,
+        "action_type": "VISUALIZATION",
+        "instruction_text": "Extend your arms in the form of a cross and say: Before me, Raphael. Behind me, Gabriel. On my right hand, Michael. On my left hand, Auriel."
+      },
+      {
+        "order": 20,
+        "action_type": "VISUALIZATION",
+        "instruction_text": "Visualize: For about me flames the Pentagram, and in the column shines the six-rayed Star."
+      },
+      {
+        "order": 21,
+        "action_type": "GESTURE",
+        "instruction_text": "Repeat the Qabalistic Cross. Touch your forehead.",
+        "audio_vibration": {
+          "word": "Ateh",
+          "phonetic": "Ah-teh"
+        }
+      },
+      {
+        "order": 22,
+        "action_type": "GESTURE",
+        "instruction_text": "Touch your chest, pointing downward.",
+        "audio_vibration": {
+          "word": "Malkuth",
+          "phonetic": "Mal-kooth"
+        }
+      },
+      {
+        "order": 23,
+        "action_type": "GESTURE",
+        "instruction_text": "Touch your right shoulder.",
+        "audio_vibration": {
+          "word": "Ve-Geburah",
+          "phonetic": "Veh-Geh-boo-rah"
+        }
+      },
+      {
+        "order": 24,
+        "action_type": "GESTURE",
+        "instruction_text": "Touch your left shoulder.",
+        "audio_vibration": {
+          "word": "Ve-Gedulah",
+          "phonetic": "Veh-Geh-doo-lah"
+        }
+      },
+      {
+        "order": 25,
+        "action_type": "GESTURE",
+        "instruction_text": "Clasp your hands upon your breast. The ritual is complete.",
+        "audio_vibration": {
+          "word": "Le-Olam, Amen",
+          "phonetic": "Leh-Oh-lahm, Ah-men"
+        }
+      }
+    ]
+  },
+  {
+    "id": "mp",
+    "name": "Middle Pillar Exercise",
+    "description": "An energy-building exercise that activates the central pillar of the Tree of Life within the practitioner's body.",
+    "tradition": "Golden Dawn",
+    "steps": [
+      {
+        "order": 1,
+        "action_type": "VISUALIZATION",
+        "instruction_text": "Stand upright, facing East. Visualize a sphere of brilliant white light above your head – the Crown (Kether).",
+        "compass_direction": "EAST"
+      },
+      {
+        "order": 2,
+        "action_type": "VIBRATION",
+        "instruction_text": "Focus on the white sphere above your head. Vibrate the Divine Name slowly and powerfully.",
+        "audio_vibration": {
+          "word": "AHIH",
+          "phonetic": "Eh-heh-yeh"
+        }
+      },
+      {
+        "order": 3,
+        "action_type": "VISUALIZATION",
+        "instruction_text": "See a beam of light descend from the Crown to your throat. A sphere of lavender light forms at the throat – Daath."
+      },
+      {
+        "order": 4,
+        "action_type": "VIBRATION",
+        "instruction_text": "Focus on the lavender sphere at your throat. Vibrate the Divine Name.",
+        "audio_vibration": {
+          "word": "YHVH ALHIM",
+          "phonetic": "Yod-Heh-Vav-Heh El-oh-heem"
+        }
+      },
+      {
+        "order": 5,
+        "action_type": "VISUALIZATION",
+        "instruction_text": "The beam continues down to your heart center. A sphere of golden light forms – Tiphareth."
+      },
+      {
+        "order": 6,
+        "action_type": "VIBRATION",
+        "instruction_text": "Focus on the golden sphere at your heart. Vibrate the Divine Name.",
+        "audio_vibration": {
+          "word": "YHVH ALVH VDOTh",
+          "phonetic": "Yod-Heh-Vav-Heh El-oh-ah Veh-Da-ath"
+        }
+      },
+      {
+        "order": 7,
+        "action_type": "VISUALIZATION",
+        "instruction_text": "The beam descends to your groin area. A sphere of violet light forms – Yesod."
+      },
+      {
+        "order": 8,
+        "action_type": "VIBRATION",
+        "instruction_text": "Focus on the violet sphere. Vibrate the Divine Name.",
+        "audio_vibration": {
+          "word": "ShDI AL ChI",
+          "phonetic": "Shah-dai El Chai"
+        }
+      },
+      {
+        "order": 9,
+        "action_type": "VISUALIZATION",
+        "instruction_text": "The beam descends to your feet. A sphere of black and olive light forms – Malkuth."
+      },
+      {
+        "order": 10,
+        "action_type": "VIBRATION",
+        "instruction_text": "Focus on the sphere at your feet. Vibrate the Divine Name.",
+        "audio_vibration": {
+          "word": "ADNI HARTz",
+          "phonetic": "Ah-doh-nai Ha-Ah-retz"
+        }
+      },
+      {
+        "order": 11,
+        "action_type": "VISUALIZATION",
+        "instruction_text": "Now visualize all five spheres connected by the central beam of light, pulsing with energy. Feel the Middle Pillar alive within you. The exercise is complete."
+      }
+    ]
+  }
+]
