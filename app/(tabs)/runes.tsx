@@ -1,16 +1,25 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Text, View, StyleSheet, TextInput, ScrollView, Platform, Pressable, Alert } from 'react-native';
-import Svg, { Line, Rect, Path } from 'react-native-svg';
+import Svg, { Line, Rect, Path, Defs, Filter, FeGaussianBlur, FeFlood, FeComposite, FeMerge, FeMergeNode, G } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { ScreenContainer } from '@/components/screen-container';
 import { ELDER_FUTHARK, Rune, findRunesByKeyword, generateBindruneData } from '@/lib/runes/futhark';
 import { useAstroStore } from '@/lib/astro/store';
 import { PLANET_SYMBOLS } from '@/lib/astro/types';
 
+// Neon glow color options
+const GLOW_GOLD = '#FFD700';
+const GLOW_CYAN = '#00FFFF';
+const STROKE_COLOR = '#D4AF37';
+const STROKE_WIDTH_MAIN = 5;    // Thick strokes for power
+const STROKE_WIDTH_SPINE = 6;   // Even thicker spine
+const GLOW_RADIUS = 12;
+
 export default function RunicForgeScreen() {
   const [keywords, setKeywords] = useState<string[]>([]);
   const [inputText, setInputText] = useState('');
   const [selectedRunes, setSelectedRunes] = useState<Rune[]>([]);
+  const [glowColor, setGlowColor] = useState(GLOW_GOLD);
   const chartData = useAstroStore((s) => s.chartData);
 
   const addKeyword = useCallback(() => {
@@ -69,7 +78,7 @@ export default function RunicForgeScreen() {
   // Generate bindrune using Absolute Stacking
   const bindruneData = useMemo(() => {
     if (selectedRunes.length === 0) return null;
-    return generateBindruneData(selectedRunes);
+    return generateBindruneData(selectedRunes, 240, 340);
   }, [selectedRunes]);
 
   // Astro warnings
@@ -89,6 +98,13 @@ export default function RunicForgeScreen() {
       })
       .filter(w => w.issues.length > 0);
   }, [selectedRunes, chartData]);
+
+  const toggleGlowColor = useCallback(() => {
+    if (Platform.OS !== ('web' as string)) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    setGlowColor(prev => prev === GLOW_GOLD ? GLOW_CYAN : GLOW_GOLD);
+  }, []);
 
   return (
     <ScreenContainer>
@@ -159,51 +175,175 @@ export default function RunicForgeScreen() {
           </View>
         )}
 
-        {/* Bindrune SVG Preview – Absolute Stacking */}
+        {/* Bindrune SVG Preview – Neon & Stone Aesthetics */}
         {bindruneData ? (
           <View style={styles.svgContainer}>
-            <Svg
-              width={bindruneData.width}
-              height={bindruneData.height}
-              viewBox={`0 0 ${bindruneData.width} ${bindruneData.height}`}
+            {/* Glow color toggle */}
+            <Pressable
+              onPress={toggleGlowColor}
+              style={({ pressed }) => [styles.glowToggle, pressed && { opacity: 0.7 }]}
             >
-              <Rect width={bindruneData.width} height={bindruneData.height} fill="transparent" />
-              {/* Layer 0: Central Stave (Spine) */}
-              <Line
-                x1={bindruneData.cx}
-                y1={bindruneData.staveTop}
-                x2={bindruneData.cx}
-                y2={bindruneData.staveBottom}
-                stroke="#D4AF37"
-                strokeWidth={2.5}
-                strokeLinecap="round"
-              />
-              {/* Layer 1-N: Rune line segments */}
-              {bindruneData.lines.map((line) => (
+              <View style={[styles.glowDot, { backgroundColor: glowColor }]} />
+              <Text style={styles.glowToggleText}>
+                {glowColor === GLOW_GOLD ? 'Gold Aura' : 'Cyan Aura'}
+              </Text>
+            </Pressable>
+
+            {/* The Bindrune with Neon Glow */}
+            <View style={[
+              styles.bindruneGlowWrapper,
+              {
+                shadowColor: glowColor,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 1.0,
+                shadowRadius: GLOW_RADIUS,
+                elevation: 20,
+              },
+            ]}>
+              <Svg
+                width={bindruneData.width}
+                height={bindruneData.height}
+                viewBox={`0 0 ${bindruneData.width} ${bindruneData.height}`}
+              >
+                <Rect width={bindruneData.width} height={bindruneData.height} fill="transparent" />
+
+                {/* Glow layer (drawn first, thicker, semi-transparent) */}
+                <G opacity={0.4}>
+                  <Line
+                    x1={bindruneData.cx}
+                    y1={bindruneData.staveTop}
+                    x2={bindruneData.cx}
+                    y2={bindruneData.staveBottom}
+                    stroke={glowColor}
+                    strokeWidth={STROKE_WIDTH_SPINE + 8}
+                    strokeLinecap="round"
+                  />
+                  {bindruneData.lines.map((line) => (
+                    <Line
+                      key={`glow-${line.key}`}
+                      x1={line.x1}
+                      y1={line.y1}
+                      x2={line.x2}
+                      y2={line.y2}
+                      stroke={glowColor}
+                      strokeWidth={STROKE_WIDTH_MAIN + 8}
+                      strokeLinecap="round"
+                    />
+                  ))}
+                  {bindruneData.paths.map((p) => (
+                    <Path
+                      key={`glow-${p.key}`}
+                      d={p.d}
+                      stroke={glowColor}
+                      strokeWidth={STROKE_WIDTH_MAIN + 8}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      fill="none"
+                    />
+                  ))}
+                </G>
+
+                {/* Secondary glow layer (medium) */}
+                <G opacity={0.6}>
+                  <Line
+                    x1={bindruneData.cx}
+                    y1={bindruneData.staveTop}
+                    x2={bindruneData.cx}
+                    y2={bindruneData.staveBottom}
+                    stroke={glowColor}
+                    strokeWidth={STROKE_WIDTH_SPINE + 3}
+                    strokeLinecap="round"
+                  />
+                  {bindruneData.lines.map((line) => (
+                    <Line
+                      key={`glow2-${line.key}`}
+                      x1={line.x1}
+                      y1={line.y1}
+                      x2={line.x2}
+                      y2={line.y2}
+                      stroke={glowColor}
+                      strokeWidth={STROKE_WIDTH_MAIN + 3}
+                      strokeLinecap="round"
+                    />
+                  ))}
+                  {bindruneData.paths.map((p) => (
+                    <Path
+                      key={`glow2-${p.key}`}
+                      d={p.d}
+                      stroke={glowColor}
+                      strokeWidth={STROKE_WIDTH_MAIN + 3}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      fill="none"
+                    />
+                  ))}
+                </G>
+
+                {/* Core layer (sharp, bright) */}
                 <Line
-                  key={line.key}
-                  x1={line.x1}
-                  y1={line.y1}
-                  x2={line.x2}
-                  y2={line.y2}
-                  stroke="#D4AF37"
-                  strokeWidth={1.8}
+                  x1={bindruneData.cx}
+                  y1={bindruneData.staveTop}
+                  x2={bindruneData.cx}
+                  y2={bindruneData.staveBottom}
+                  stroke={STROKE_COLOR}
+                  strokeWidth={STROKE_WIDTH_SPINE}
                   strokeLinecap="round"
                 />
-              ))}
-              {/* Closed paths (polygons like Ingwaz diamond) */}
-              {bindruneData.paths.map((p) => (
-                <Path
-                  key={p.key}
-                  d={p.d}
-                  stroke="#D4AF37"
-                  strokeWidth={1.8}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  fill="none"
-                />
-              ))}
-            </Svg>
+                {bindruneData.lines.map((line) => (
+                  <Line
+                    key={line.key}
+                    x1={line.x1}
+                    y1={line.y1}
+                    x2={line.x2}
+                    y2={line.y2}
+                    stroke={STROKE_COLOR}
+                    strokeWidth={STROKE_WIDTH_MAIN}
+                    strokeLinecap="round"
+                  />
+                ))}
+                {bindruneData.paths.map((p) => (
+                  <Path
+                    key={p.key}
+                    d={p.d}
+                    stroke={STROKE_COLOR}
+                    strokeWidth={STROKE_WIDTH_MAIN}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                ))}
+
+                {/* Inner bright core (white highlight) */}
+                <G opacity={0.3}>
+                  <Line
+                    x1={bindruneData.cx}
+                    y1={bindruneData.staveTop}
+                    x2={bindruneData.cx}
+                    y2={bindruneData.staveBottom}
+                    stroke="#FFFFFF"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                  />
+                  {bindruneData.lines.map((line) => (
+                    <Line
+                      key={`core-${line.key}`}
+                      x1={line.x1}
+                      y1={line.y1}
+                      x2={line.x2}
+                      y2={line.y2}
+                      stroke="#FFFFFF"
+                      strokeWidth={1.5}
+                      strokeLinecap="round"
+                    />
+                  ))}
+                </G>
+              </Svg>
+            </View>
+
+            {/* Rune composition label */}
+            <Text style={styles.compositionLabel}>
+              {selectedRunes.map(r => r.symbol).join(' + ')}
+            </Text>
           </View>
         ) : (
           <View style={styles.emptyState}>
@@ -277,8 +417,25 @@ const styles = StyleSheet.create({
   warningBox: { backgroundColor: '#F59E0B10', borderWidth: 1, borderColor: '#F59E0B30', borderRadius: 8, padding: 10, marginTop: 12 },
   warningText: { fontSize: 12, color: '#F59E0B', lineHeight: 20 },
   svgContainer: {
-    alignItems: 'center', marginTop: 24, backgroundColor: '#0D0D0D',
-    borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 12, padding: 20,
+    alignItems: 'center', marginTop: 24, backgroundColor: '#080808',
+    borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 16, padding: 24,
+  },
+  glowToggle: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-end', marginBottom: 12,
+    paddingHorizontal: 12, paddingVertical: 4,
+    borderRadius: 12, borderWidth: 1, borderColor: '#1A1A1A',
+    backgroundColor: '#0D0D0D',
+  },
+  glowDot: { width: 8, height: 8, borderRadius: 4 },
+  glowToggleText: { fontSize: 10, color: '#6B6B6B', fontFamily: 'JetBrainsMono' },
+  bindruneGlowWrapper: {
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  compositionLabel: {
+    fontFamily: 'JetBrainsMono', fontSize: 16, color: '#D4AF3780',
+    marginTop: 16, letterSpacing: 4, textAlign: 'center',
   },
   emptyState: { alignItems: 'center', marginTop: 40, paddingVertical: 40 },
   emptySymbol: { fontSize: 48, color: '#1A1A1A' },

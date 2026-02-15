@@ -103,3 +103,22 @@
 - [x] Aspect filters: Major aspects only (Conjunction, Opposition, Square, Trine) with orb < 3°
 - [x] Exact aspect highlighting on Dashboard (< 1° orb)
 - [x] Ruler of the Day recommendation with ritual suggestion
+
+## UI/FX Visual Update
+
+### Module 3: Compass Debug (Black Screen Fix)
+- [x] Force mock data when sensors unavailable (hardcoded planet positions)
+- [x] Wrap planet rendering in try/catch, NaN → center fallback
+- [x] Fix zIndex: planets=10, background rings=1
+- [x] Ensure compass renders on simulator/web without sensors
+
+### Module 2: Rune Aesthetics (Neon & Stone)
+- [x] Increase SVG strokeWidth from ~1px to 4-6px
+- [x] Add neon glow drop shadow (Gold #FFD700 or Cyan #00FFFF, radius 15)
+- [x] Use strokeLinecap="round" and strokeLinejoin="round"
+- [x] Fix Gebo X center alignment (pixel-perfect cx, cy)
+
+### Module 1: Ritual Animation (Ghost Guide)
+- [x] Animate glowing ghost particle along pentagram SVG path (~4s loop)
+- [x] Change dashed line to pulsing opacity breathing effect
+- [x] Add trailing sparkler particle effect following finger drag
