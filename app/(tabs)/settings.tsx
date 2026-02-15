@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Text, View, StyleSheet, TextInput, ScrollView, Platform, Pressable, FlatList, ActivityIndicator } from 'react-native';
+import { Text, View, StyleSheet, TextInput, ScrollView, Platform, Pressable, FlatList, ActivityIndicator, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import { ScreenContainer } from '@/components/screen-container';
@@ -244,6 +244,28 @@ export default function SettingsScreen() {
             <Text style={styles.aboutValue}>OpenStreetMap / Nominatim</Text>
           </View>
         </View>
+
+        {/* Legal Section */}
+        <Text style={styles.sectionTitle}>Legal</Text>
+        <View style={styles.card}>
+          <Pressable
+            onPress={() => Linking.openURL('https://siderum.app/privacy')}
+            style={({ pressed }) => [styles.legalRow, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.legalIcon}>🔒</Text>
+            <Text style={styles.legalText}>Privacy Policy</Text>
+            <Text style={styles.legalArrow}>›</Text>
+          </Pressable>
+          <View style={styles.legalDivider} />
+          <Pressable
+            onPress={() => Linking.openURL('https://siderum.app/terms')}
+            style={({ pressed }) => [styles.legalRow, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.legalIcon}>📄</Text>
+            <Text style={styles.legalText}>Terms of Service</Text>
+            <Text style={styles.legalArrow}>›</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </ScreenContainer>
   );
@@ -440,5 +462,29 @@ const styles = StyleSheet.create({
     fontFamily: 'JetBrainsMono',
     fontSize: 12,
     color: '#E0E0E0',
+  },
+  legalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    gap: 10,
+  },
+  legalIcon: {
+    fontSize: 18,
+    width: 28,
+    textAlign: 'center',
+  },
+  legalText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#E0E0E0',
+  },
+  legalArrow: {
+    fontSize: 18,
+    color: '#6B6B6B',
+  },
+  legalDivider: {
+    height: 1,
+    backgroundColor: '#1A1A1A',
   },
 });

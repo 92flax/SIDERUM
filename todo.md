@@ -122,3 +122,25 @@
 - [x] Animate glowing ghost particle along pentagram SVG path (~4s loop)
 - [x] Change dashed line to pulsing opacity breathing effect
 - [x] Add trailing sparkler particle effect following finger drag
+
+## Golden Master Polish
+
+### 1. Rune Visual Refinement
+- [x] Change strokeLinecap from "round" to "square"
+- [x] Reduce glow blur radius for sharper definition
+
+### 2. Ritual Interaction Update
+- [x] Auto-play Ghost Particle on loop when screen loads
+- [x] Remove large "Simulate Trace" button, replace with small Replay icon
+- [x] Ensure touch events enabled on Holo-Pad for drawing
+
+### 3. Settings & Legal
+- [x] Add Privacy Policy link in Settings
+- [x] Add Terms of Service link in Settings
+
+### 4. Monetization Tweak
+- [x] Add Yearly Access option ($39.99 Best Value) to Paywall
+
+### 5. Haptics
+- [x] Heavy impact haptic on completing a Rune drawing
+- [x] Success haptic on finishing a Ritual step

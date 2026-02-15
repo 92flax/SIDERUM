@@ -13,7 +13,7 @@ const GLOW_CYAN = '#00FFFF';
 const STROKE_COLOR = '#D4AF37';
 const STROKE_WIDTH_MAIN = 5;    // Thick strokes for power
 const STROKE_WIDTH_SPINE = 6;   // Even thicker spine
-const GLOW_RADIUS = 12;
+const GLOW_RADIUS = 8;  // Sharper, more defined glow
 
 export default function RunicForgeScreen() {
   const [keywords, setKeywords] = useState<string[]>([]);
@@ -216,7 +216,7 @@ export default function RunicForgeScreen() {
                     y2={bindruneData.staveBottom}
                     stroke={glowColor}
                     strokeWidth={STROKE_WIDTH_SPINE + 8}
-                    strokeLinecap="round"
+                    strokeLinecap="square"
                   />
                   {bindruneData.lines.map((line) => (
                     <Line
@@ -226,8 +226,8 @@ export default function RunicForgeScreen() {
                       x2={line.x2}
                       y2={line.y2}
                       stroke={glowColor}
-                      strokeWidth={STROKE_WIDTH_MAIN + 8}
-                      strokeLinecap="round"
+                      strokeWidth={STROKE_WIDTH_MAIN + 6}
+                      strokeLinecap="square"
                     />
                   ))}
                   {bindruneData.paths.map((p) => (
@@ -235,9 +235,9 @@ export default function RunicForgeScreen() {
                       key={`glow-${p.key}`}
                       d={p.d}
                       stroke={glowColor}
-                      strokeWidth={STROKE_WIDTH_MAIN + 8}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                      strokeWidth={STROKE_WIDTH_MAIN + 6}
+                      strokeLinecap="square"
+                      strokeLinejoin="miter"
                       fill="none"
                     />
                   ))}
@@ -252,7 +252,7 @@ export default function RunicForgeScreen() {
                     y2={bindruneData.staveBottom}
                     stroke={glowColor}
                     strokeWidth={STROKE_WIDTH_SPINE + 3}
-                    strokeLinecap="round"
+                    strokeLinecap="square"
                   />
                   {bindruneData.lines.map((line) => (
                     <Line
@@ -263,7 +263,7 @@ export default function RunicForgeScreen() {
                       y2={line.y2}
                       stroke={glowColor}
                       strokeWidth={STROKE_WIDTH_MAIN + 3}
-                      strokeLinecap="round"
+                      strokeLinecap="square"
                     />
                   ))}
                   {bindruneData.paths.map((p) => (
@@ -272,8 +272,8 @@ export default function RunicForgeScreen() {
                       d={p.d}
                       stroke={glowColor}
                       strokeWidth={STROKE_WIDTH_MAIN + 3}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                      strokeLinecap="square"
+                      strokeLinejoin="miter"
                       fill="none"
                     />
                   ))}
@@ -287,7 +287,7 @@ export default function RunicForgeScreen() {
                   y2={bindruneData.staveBottom}
                   stroke={STROKE_COLOR}
                   strokeWidth={STROKE_WIDTH_SPINE}
-                  strokeLinecap="round"
+                  strokeLinecap="square"
                 />
                 {bindruneData.lines.map((line) => (
                   <Line
@@ -298,7 +298,7 @@ export default function RunicForgeScreen() {
                     y2={line.y2}
                     stroke={STROKE_COLOR}
                     strokeWidth={STROKE_WIDTH_MAIN}
-                    strokeLinecap="round"
+                    strokeLinecap="square"
                   />
                 ))}
                 {bindruneData.paths.map((p) => (
@@ -307,8 +307,8 @@ export default function RunicForgeScreen() {
                     d={p.d}
                     stroke={STROKE_COLOR}
                     strokeWidth={STROKE_WIDTH_MAIN}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                    strokeLinecap="square"
+                    strokeLinejoin="miter"
                     fill="none"
                   />
                 ))}
@@ -333,7 +333,7 @@ export default function RunicForgeScreen() {
                       y2={line.y2}
                       stroke="#FFFFFF"
                       strokeWidth={1.5}
-                      strokeLinecap="round"
+                      strokeLinecap="square"
                     />
                   ))}
                 </G>
@@ -367,8 +367,13 @@ export default function RunicForgeScreen() {
                   if (isSelected) {
                     setSelectedRunes(prev => prev.filter(r => r.name !== rune.name));
                   } else {
-                    setSelectedRunes(prev => [...prev, rune]);
+                    const newRunes = [...selectedRunes, rune];
+                    setSelectedRunes(newRunes);
                     checkAstroWarning(rune);
+                    // Heavy haptic when adding a rune to the bindrune
+                    if (newRunes.length >= 2 && Platform.OS !== ('web' as string)) {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                    }
                   }
                 }}
                 style={({ pressed }) => [

@@ -3,6 +3,7 @@
 // Sleek modal with benefits list and upgrade CTA
 // ============================================================
 
+import { useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, Platform, ScrollView } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useProStore, PRO_FEATURES } from '@/lib/store/pro-store';
@@ -29,11 +30,13 @@ export function PaywallModal({ visible, onClose, featureId }: PaywallModalProps)
     ? PRO_FEATURES.find(f => f.id === featureId)
     : null;
 
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
+
   const handleUpgrade = async () => {
     if (Platform.OS !== ('web' as string)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
-    // In production: RevenueCat purchase flow
+    // In production: RevenueCat purchase flow with selectedPlan
     await upgradeToPro();
     onClose();
   };
@@ -84,14 +87,50 @@ export function PaywallModal({ visible, onClose, featureId }: PaywallModalProps)
               ))}
             </View>
 
-            {/* Pricing */}
-            <View style={styles.pricingCard}>
-              <Text style={styles.pricingLabel}>Monthly</Text>
-              <View style={styles.pricingRow}>
-                <Text style={styles.pricingAmount}>$4.99</Text>
-                <Text style={styles.pricingPeriod}>/month</Text>
-              </View>
-              <Text style={styles.pricingNote}>Cancel anytime · 7-day free trial</Text>
+            {/* Pricing Options */}
+            <View style={styles.pricingContainer}>
+              {/* Yearly – Best Value */}
+              <Pressable
+                onPress={() => {
+                  setSelectedPlan('yearly');
+                  if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+                style={({ pressed }) => [
+                  styles.pricingCard,
+                  selectedPlan === 'yearly' && styles.pricingCardSelected,
+                  pressed && { opacity: 0.85 },
+                ]}
+              >
+                <View style={styles.bestValueBadge}>
+                  <Text style={styles.bestValueText}>BEST VALUE</Text>
+                </View>
+                <Text style={styles.pricingLabel}>Yearly</Text>
+                <View style={styles.pricingRow}>
+                  <Text style={styles.pricingAmount}>$39.99</Text>
+                  <Text style={styles.pricingPeriod}>/year</Text>
+                </View>
+                <Text style={styles.pricingNote}>$3.33/month · Save 33%</Text>
+              </Pressable>
+
+              {/* Monthly */}
+              <Pressable
+                onPress={() => {
+                  setSelectedPlan('monthly');
+                  if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+                style={({ pressed }) => [
+                  styles.pricingCard,
+                  selectedPlan === 'monthly' && styles.pricingCardSelected,
+                  pressed && { opacity: 0.85 },
+                ]}
+              >
+                <Text style={styles.pricingLabel}>Monthly</Text>
+                <View style={styles.pricingRow}>
+                  <Text style={styles.pricingAmount}>$4.99</Text>
+                  <Text style={styles.pricingPeriod}>/month</Text>
+                </View>
+                <Text style={styles.pricingNote}>Cancel anytime · 7-day free trial</Text>
+              </Pressable>
             </View>
 
             {/* CTA */}
@@ -233,15 +272,42 @@ const styles = StyleSheet.create({
     marginTop: 1,
     lineHeight: 16,
   },
+  pricingContainer: {
+    width: '100%',
+    marginTop: 24,
+    gap: 10,
+  },
   pricingCard: {
     backgroundColor: '#0D0D0D',
     borderWidth: 1,
-    borderColor: '#D4AF3740',
+    borderColor: '#1A1A1A',
     borderRadius: 16,
-    padding: 20,
-    marginTop: 24,
+    padding: 18,
     width: '100%',
     alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  pricingCardSelected: {
+    borderColor: '#D4AF37',
+    borderWidth: 2,
+    backgroundColor: '#D4AF3708',
+  },
+  bestValueBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#D4AF37',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderBottomLeftRadius: 8,
+  },
+  bestValueText: {
+    fontFamily: 'JetBrainsMono',
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#050505',
+    letterSpacing: 1,
   },
   pricingLabel: {
     fontSize: 11,

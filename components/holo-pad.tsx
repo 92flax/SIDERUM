@@ -477,15 +477,27 @@ export function HoloPad({ shape, colorHex, isTraced, onSimulateTrace }: HoloPadP
         </View>
       </Animated.View>
 
-      {/* Simulate button for web */}
-      {Platform.OS === ('web' as string) && !isTraced && onSimulateTrace && (
-        <Pressable
-          onPress={onSimulateTrace}
-          style={({ pressed }) => [styles.simBtn, pressed && { opacity: 0.7 }]}
-        >
-          <Text style={styles.simBtnText}>Simulate Trace</Text>
-        </Pressable>
-      )}
+      {/* Small replay/simulate controls */}
+      <View style={styles.controlRow}>
+        {Platform.OS === ('web' as string) && !isTraced && onSimulateTrace && (
+          <Pressable
+            onPress={onSimulateTrace}
+            style={({ pressed }) => [styles.replayBtn, pressed && { opacity: 0.5 }]}
+          >
+            <Text style={styles.replayBtnText}>✓ Complete</Text>
+          </Pressable>
+        )}
+        {isTraced && onSimulateTrace && (
+          <Pressable
+            onPress={() => {
+              // Reset would be handled by parent
+            }}
+            style={({ pressed }) => [styles.replayBtn, pressed && { opacity: 0.5 }]}
+          >
+            <Text style={styles.replayBtnText}>↻</Text>
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 }
@@ -522,15 +534,23 @@ const styles = StyleSheet.create({
     color: '#6B6B6B',
     letterSpacing: 1,
   },
-  simBtn: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginTop: 12,
+  controlRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 6,
+    gap: 8,
   },
-  simBtnText: {
-    fontSize: 13,
-    color: '#E0E0E0',
+  replayBtn: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+  },
+  replayBtnText: {
+    fontSize: 11,
+    color: '#6B6B6B',
+    fontFamily: 'JetBrainsMono',
   },
 });

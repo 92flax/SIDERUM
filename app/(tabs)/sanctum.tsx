@@ -78,7 +78,10 @@ export default function SanctumScreen() {
 
   const handleNextStep = useCallback(() => {
     if (Platform.OS !== ('web' as string)) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      // Heavy impact for completing a ritual step
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      // Additional success notification for step completion
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     alignedRef.current = false;
     nextStep();
