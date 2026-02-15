@@ -144,3 +144,27 @@
 ### 5. Haptics
 - [x] Heavy impact haptic on completing a Rune drawing
 - [x] Success haptic on finishing a Ritual step
+
+## Final Polish (AR Depth, Ritual Intent & Pedagogy)
+
+### Module 1: Ritual Intent & Direction Logic
+- [x] Add BANISH/INVOKE intent toggle on Ritual Start screen (default BANISH)
+- [x] Correct Pentagram directions (Banishing: Lower-Left→Top, Invoking: Top→Lower-Left)
+- [x] Render pulsing Start-Anchor Halo at initial vertex
+- [x] Ghost Particle spawns from anchor point
+- [x] Force Electric Blue (#00FFFF) for LBRP Banish steps
+
+### Module 2: AR Depth & Sensor Fusion
+- [x] Integrate DeviceMotion for vertical pitch tracking
+- [x] 3D Projection: Y-position of planets corresponds to Altitude (-90° to +90°)
+- [x] Planets above horizon appear when tilting phone up, below when tilting down
+
+### Module 3: Astro-Pedagogy
+- [x] Make Aspectarian rows tappable with explanation modal/tooltip
+- [x] Add written names next to symbols in Compass/Radar (e.g., "☉ Sun")
+- [x] Planet Info modal with Element and Principle for 7 classical planets
+
+### Module 5: Onboarding
+- [x] 3-Slide Onboarding: "Celestial Intelligence"
+- [x] 3-Slide Onboarding: "Ritual Compass" (sensor-fused navigation)
+- [x] 3-Slide Onboarding: "Runic Forge" (bindrune generator)

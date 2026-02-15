@@ -16,8 +16,10 @@ export default function SanctumScreen() {
   const currentStepIndex = useRitualStore((s) => s.currentStepIndex);
   const playerState = useRitualStore((s) => s.playerState);
   const isDirectionLocked = useRitualStore((s) => s.isDirectionLocked);
+  const intent = useRitualStore((s) => s.intent);
   const loadRituals = useRitualStore((s) => s.loadRituals);
   const selectRitual = useRitualStore((s) => s.selectRitual);
+  const setIntent = useRitualStore((s) => s.setIntent);
   const startRitual = useRitualStore((s) => s.startRitual);
   const nextStep = useRitualStore((s) => s.nextStep);
   const prevStep = useRitualStore((s) => s.prevStep);
@@ -78,9 +80,7 @@ export default function SanctumScreen() {
 
   const handleNextStep = useCallback(() => {
     if (Platform.OS !== ('web' as string)) {
-      // Heavy impact for completing a ritual step
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      // Additional success notification for step completion
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     alignedRef.current = false;
@@ -95,8 +95,11 @@ export default function SanctumScreen() {
     prevStep();
   }, [prevStep]);
 
+  // Determine if current ritual is LBRP
+  const isLBRP = currentRitual?.id === 'lbrp' || currentRitual?.name?.toLowerCase().includes('lesser banishing');
+
   // ==========================================
-  // Ritual Selection Screen
+  // Ritual Selection Screen with Intent Toggle
   // ==========================================
   if (!currentRitual || playerState === 'idle') {
     return (
@@ -112,6 +115,55 @@ export default function SanctumScreen() {
               <Text style={styles.ritualMeta}>
                 {currentRitual.tradition} · {currentRitual.steps.length} steps
               </Text>
+
+              {/* ===== INTENT TOGGLE ===== */}
+              <View style={styles.intentSection}>
+                <Text style={styles.intentLabel}>RITUAL INTENT</Text>
+                <View style={styles.intentToggle}>
+                  <Pressable
+                    onPress={() => {
+                      if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      setIntent('BANISH');
+                    }}
+                    style={({ pressed }) => [
+                      styles.intentBtn,
+                      intent === 'BANISH' && styles.intentBtnActiveBanish,
+                      pressed && { opacity: 0.8 },
+                    ]}
+                  >
+                    <Text style={[styles.intentBtnText, intent === 'BANISH' && styles.intentBtnTextActive]}>
+                      ↑ BANISH
+                    </Text>
+                    <Text style={[styles.intentBtnSub, intent === 'BANISH' && { color: '#00CCCC' }]}>
+                      Earth → Spirit
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      setIntent('INVOKE');
+                    }}
+                    style={({ pressed }) => [
+                      styles.intentBtn,
+                      intent === 'INVOKE' && styles.intentBtnActiveInvoke,
+                      pressed && { opacity: 0.8 },
+                    ]}
+                  >
+                    <Text style={[styles.intentBtnText, intent === 'INVOKE' && styles.intentBtnTextActive]}>
+                      ↓ INVOKE
+                    </Text>
+                    <Text style={[styles.intentBtnSub, intent === 'INVOKE' && { color: '#CC8800' }]}>
+                      Spirit → Earth
+                    </Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.intentHint}>
+                  {intent === 'BANISH'
+                    ? 'Banishing: Clears unwanted energies. Start from Lower-Left (Earth) vertex.'
+                    : 'Invoking: Draws energy inward. Start from Top (Spirit) vertex.'}
+                </Text>
+              </View>
+
               <Pressable
                 onPress={() => {
                   if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -160,6 +212,9 @@ export default function SanctumScreen() {
           <Text style={styles.completedSymbol}>✦</Text>
           <Text style={styles.completedTitle}>Ritual Complete</Text>
           <Text style={styles.completedName}>{currentRitual.name}</Text>
+          <Text style={styles.completedIntent}>
+            Intent: {intent === 'BANISH' ? '↑ Banishing' : '↓ Invoking'}
+          </Text>
           <Text style={styles.completedText}>
             All {currentRitual.steps.length} steps have been performed.
           </Text>
@@ -187,12 +242,10 @@ export default function SanctumScreen() {
   const isTracingStep = currentStep?.action_type === 'TRACE';
   const isTracingDetected = useRitualStore.getState().isTracingDetected;
 
-  // Check if next step is a TRACE step (for combined view)
   const nextStepData = currentRitual.steps[currentStepIndex + 1];
   const nextIsTrace = nextStepData?.action_type === 'TRACE';
   const showHoloPad = hasTracingShape || isTracingStep || nextIsTrace;
 
-  // Get the shape to display (from current step or next step)
   const shapeData = currentStep?.ar_element || nextStepData?.ar_element;
 
   const actionTypeColors: Record<string, string> = {
@@ -218,9 +271,15 @@ export default function SanctumScreen() {
           <View style={[styles.progressFill, { width: `${progress}%` }]} />
         </View>
 
-        <Text style={styles.stepCounter}>
-          Step {currentStepIndex + 1} of {currentRitual.steps.length}
-        </Text>
+        {/* Intent indicator */}
+        <View style={styles.intentIndicator}>
+          <Text style={[styles.intentIndicatorText, { color: intent === 'BANISH' ? '#00FFFF' : '#D4AF37' }]}>
+            {intent === 'BANISH' ? '↑ BANISH' : '↓ INVOKE'}
+          </Text>
+          <Text style={styles.stepCounter}>
+            Step {currentStepIndex + 1} / {currentRitual.steps.length}
+          </Text>
+        </View>
 
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -288,6 +347,8 @@ export default function SanctumScreen() {
                 colorHex={shapeData.color_hex}
                 isTraced={isTracingStep ? isTracingDetected : false}
                 onSimulateTrace={isTracingStep ? () => setTracingDetected(true) : undefined}
+                intent={intent}
+                isLBRP={isLBRP}
               />
             </View>
           )}
@@ -349,6 +410,32 @@ const styles = StyleSheet.create({
   ritualName: { fontFamily: 'Cinzel', fontSize: 16, color: '#D4AF37' },
   ritualDesc: { fontSize: 13, color: '#E0E0E0', marginTop: 8, lineHeight: 20 },
   ritualMeta: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 8 },
+
+  // Intent Toggle
+  intentSection: { marginTop: 16 },
+  intentLabel: {
+    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B',
+    letterSpacing: 2, textAlign: 'center', marginBottom: 8,
+  },
+  intentToggle: { flexDirection: 'row', gap: 8 },
+  intentBtn: {
+    flex: 1, borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 12,
+    paddingVertical: 12, alignItems: 'center', backgroundColor: '#080808',
+  },
+  intentBtnActiveBanish: {
+    borderColor: '#00FFFF60', backgroundColor: '#00FFFF08',
+  },
+  intentBtnActiveInvoke: {
+    borderColor: '#D4AF3760', backgroundColor: '#D4AF3708',
+  },
+  intentBtnText: { fontSize: 14, fontWeight: '700', color: '#6B6B6B', letterSpacing: 1 },
+  intentBtnTextActive: { color: '#E0E0E0' },
+  intentBtnSub: { fontSize: 10, color: '#6B6B6B', marginTop: 2 },
+  intentHint: {
+    fontSize: 11, color: '#6B6B6B', textAlign: 'center', marginTop: 8,
+    fontStyle: 'italic', lineHeight: 16,
+  },
+
   startBtn: {
     backgroundColor: '#D4AF37', borderRadius: 24, paddingVertical: 12,
     alignItems: 'center', marginTop: 16,
@@ -368,7 +455,12 @@ const styles = StyleSheet.create({
   playerContent: { paddingBottom: 16 },
   progressBar: { height: 3, backgroundColor: '#1A1A1A', borderRadius: 2, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: '#D4AF37', borderRadius: 2 },
-  stepCounter: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', textAlign: 'center', marginTop: 8 },
+  intentIndicator: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginTop: 8, paddingHorizontal: 4,
+  },
+  intentIndicatorText: { fontFamily: 'JetBrainsMono', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+  stepCounter: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B' },
 
   // Instruction section (top 40%)
   instructionSection: { marginTop: 8 },
@@ -426,5 +518,6 @@ const styles = StyleSheet.create({
   completedSymbol: { fontSize: 48, color: '#D4AF37' },
   completedTitle: { fontFamily: 'Cinzel', fontSize: 24, color: '#D4AF37', marginTop: 16, letterSpacing: 3 },
   completedName: { fontSize: 15, color: '#E0E0E0', marginTop: 8, textAlign: 'center' },
+  completedIntent: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', marginTop: 4 },
   completedText: { fontSize: 13, color: '#6B6B6B', marginTop: 8, textAlign: 'center' },
 });

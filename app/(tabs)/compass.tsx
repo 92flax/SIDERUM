@@ -1,20 +1,36 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Text, View, StyleSheet, Dimensions, Platform, Pressable } from 'react-native';
-import { Magnetometer } from 'expo-sensors';
+import { Text, View, StyleSheet, Dimensions, Platform, Pressable, Modal, ScrollView } from 'react-native';
+import { Magnetometer, DeviceMotion } from 'expo-sensors';
 import Svg, { Circle, Line, Text as SvgText, G, Rect } from 'react-native-svg';
 import { ScreenContainer } from '@/components/screen-container';
 import { useAstroStore } from '@/lib/astro/store';
 import { calculateHeading } from '@/lib/compass/sensor-fusion';
 import { PLANET_SYMBOLS, PLANET_COLORS, PlanetPosition, Planet } from '@/lib/astro/types';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const RADAR_SIZE = SCREEN_WIDTH - 64;
 const RADAR_CENTER = RADAR_SIZE / 2;
 const RADAR_RADIUS = RADAR_SIZE / 2 - 30;
 
 type ViewMode = 'radar' | 'ar';
 
-// Anti-collision: resolve overlapping planet positions
+// Planet written names for pedagogy
+const PLANET_NAMES: Record<string, string> = {
+  Sun: 'Sun', Moon: 'Moon', Mercury: 'Mercury', Venus: 'Venus',
+  Mars: 'Mars', Jupiter: 'Jupiter', Saturn: 'Saturn',
+};
+
+// Planet info for pedagogy modal
+const PLANET_INFO: Record<string, { element: string; principle: string; description: string }> = {
+  Sun:     { element: 'Fire', principle: 'Vitality & Will', description: 'The Sun represents the core self, ego, vitality, and creative force. It governs authority, leadership, and the conscious mind.' },
+  Moon:    { element: 'Water', principle: 'Emotion & Intuition', description: 'The Moon governs emotions, instincts, the subconscious, and cycles of change. It rules memory, nurturing, and receptivity.' },
+  Mercury: { element: 'Air', principle: 'Communication & Intellect', description: 'Mercury rules thought, speech, writing, and commerce. It governs the rational mind, learning, and all forms of exchange.' },
+  Venus:   { element: 'Earth/Water', principle: 'Love & Harmony', description: 'Venus governs love, beauty, art, pleasure, and social bonds. It rules attraction, values, and aesthetic sensibility.' },
+  Mars:    { element: 'Fire', principle: 'Action & Conflict', description: 'Mars rules energy, aggression, courage, and physical drive. It governs competition, desire, and the warrior archetype.' },
+  Jupiter: { element: 'Fire/Air', principle: 'Expansion & Wisdom', description: 'Jupiter governs growth, abundance, philosophy, and higher learning. It rules optimism, justice, and spiritual aspiration.' },
+  Saturn:  { element: 'Earth', principle: 'Structure & Limitation', description: 'Saturn rules discipline, time, boundaries, and karma. It governs responsibility, endurance, and the lessons of experience.' },
+};
+
 interface ResolvedPosition {
   planet: PlanetPosition;
   px: number;
@@ -24,13 +40,11 @@ interface ResolvedPosition {
   color: string;
 }
 
-// Safe number helper: if NaN/Infinity → fallback
 function safeNum(val: number | undefined, fallback: number): number {
   if (val === undefined || val === null || !isFinite(val) || isNaN(val)) return fallback;
   return val;
 }
 
-// Mock azimuth/altitude for planets when sensors are unavailable
 const MOCK_POSITIONS: Record<string, { azimuth: number; altitude: number }> = {
   Sun:     { azimuth: 180, altitude: 35 },
   Moon:    { azimuth: 245, altitude: 22 },
@@ -41,7 +55,7 @@ const MOCK_POSITIONS: Record<string, { azimuth: number; altitude: number }> = {
   Saturn:  { azimuth: 45,  altitude: 10 },
 };
 
-function resolveCollisions(positions: ResolvedPosition[], minDist: number = 24): ResolvedPosition[] {
+function resolveCollisions(positions: ResolvedPosition[], minDist: number = 28): ResolvedPosition[] {
   const resolved = [...positions];
   for (let iter = 0; iter < 5; iter++) {
     for (let i = 0; i < resolved.length; i++) {
@@ -67,8 +81,10 @@ function resolveCollisions(positions: ResolvedPosition[], minDist: number = 24):
 export default function CompassScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('radar');
   const [heading, setHeading] = useState(0);
+  const [pitch, setPitch] = useState(0); // Device tilt: -90 (sky) to +90 (ground)
   const [sensorAvailable, setSensorAvailable] = useState(true);
   const [focusedPlanet, setFocusedPlanet] = useState<Planet | null>(null);
+  const [infoPlanet, setInfoPlanet] = useState<string | null>(null);
   const chartData = useAstroStore((s) => s.chartData);
   const recalculate = useAstroStore((s) => s.recalculate);
 
@@ -76,6 +92,7 @@ export default function CompassScreen() {
     recalculate();
   }, []);
 
+  // Magnetometer for heading
   useEffect(() => {
     if (Platform.OS === ('web' as string)) {
       setSensorAvailable(false);
@@ -106,7 +123,38 @@ export default function CompassScreen() {
     return () => { magSub?.remove(); };
   }, []);
 
-  // Get planets with guaranteed azimuth/altitude (mock if missing)
+  // DeviceMotion for pitch (vertical tilt)
+  useEffect(() => {
+    if (Platform.OS === ('web' as string)) return;
+
+    let motionSub: any;
+
+    const subscribe = async () => {
+      try {
+        const available = await DeviceMotion.isAvailableAsync();
+        if (!available) return;
+
+        DeviceMotion.setUpdateInterval(100);
+        motionSub = DeviceMotion.addListener((data) => {
+          if (data.rotation) {
+            // beta = pitch: phone tilted forward/backward
+            // When phone is vertical (normal hold), beta ≈ 0
+            // Tilted up toward sky: beta goes negative
+            // Tilted down toward ground: beta goes positive
+            const betaDeg = safeNum((data.rotation.beta * 180) / Math.PI, 0);
+            setPitch(betaDeg);
+          }
+        });
+      } catch {
+        // DeviceMotion not available
+      }
+    };
+
+    subscribe();
+    return () => { motionSub?.remove(); };
+  }, []);
+
+  // Get planets with guaranteed azimuth/altitude
   const planets = useMemo(() => {
     const raw = chartData?.planets.filter(p =>
       ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'].includes(p.planet)
@@ -127,7 +175,13 @@ export default function CompassScreen() {
     setFocusedPlanet(prev => prev === planet ? null : planet);
   };
 
-  // Altitude ring labels
+  const handlePlanetInfo = (planet: string) => {
+    if (Platform.OS !== ('web' as string)) {
+      import('expo-haptics').then(H => H.impactAsync(H.ImpactFeedbackStyle.Light));
+    }
+    setInfoPlanet(planet);
+  };
+
   const altitudeRings = [
     { scale: 1.0, label: 'Horizon 0°' },
     { scale: 0.75, label: '30°' },
@@ -143,7 +197,6 @@ export default function CompassScreen() {
       { label: 'W', angle: 270 },
     ];
 
-    // Calculate positions with NaN safety
     const rawPositions: ResolvedPosition[] = [];
     for (const planet of planets) {
       try {
@@ -161,21 +214,20 @@ export default function CompassScreen() {
           px,
           py,
           labelX: px,
-          labelY: py - 16,
+          labelY: py - 20,
           color: PLANET_COLORS[planet.planet] || '#E0E0E0',
         });
       } catch {
-        // Skip this planet if calculation fails
+        // Skip
       }
     }
 
-    // Resolve collisions for labels
-    const positions = resolveCollisions(rawPositions, 28);
+    const positions = resolveCollisions(rawPositions, 32);
 
     return (
       <View style={styles.radarContainer}>
         <Svg width={RADAR_SIZE} height={RADAR_SIZE} viewBox={`0 0 ${RADAR_SIZE} ${RADAR_SIZE}`}>
-          {/* Background rings (zIndex equivalent: rendered first) */}
+          {/* Background rings */}
           {altitudeRings.map(({ scale, label }) => (
             <G key={label}>
               <Circle
@@ -209,17 +261,14 @@ export default function CompassScreen() {
             return (
               <G key={dir.label}>
                 <Line
-                  x1={RADAR_CENTER}
-                  y1={RADAR_CENTER}
-                  x2={x2}
-                  y2={y2}
+                  x1={RADAR_CENTER} y1={RADAR_CENTER}
+                  x2={x2} y2={y2}
                   stroke={dir.label === 'N' ? '#D4AF3730' : '#1A1A1A'}
                   strokeWidth={dir.label === 'N' ? 1 : 0.5}
                   strokeDasharray="4,4"
                 />
                 <SvgText
-                  x={labelX}
-                  y={labelY}
+                  x={labelX} y={labelY}
                   fill={dir.label === 'N' ? '#D4AF37' : '#6B6B6B'}
                   fontSize={12}
                   fontWeight="bold"
@@ -236,7 +285,7 @@ export default function CompassScreen() {
           <Circle cx={RADAR_CENTER} cy={RADAR_CENTER} r={3} fill="#D4AF37" opacity={0.8} />
           <Circle cx={RADAR_CENTER} cy={RADAR_CENTER} r={6} fill="none" stroke="#D4AF3740" strokeWidth={1} />
 
-          {/* Planet positions (rendered last = on top, equivalent to zIndex: 10) */}
+          {/* Planet positions (rendered last = on top) */}
           {positions.map(({ planet, px, py, labelX, labelY, color }) => {
             const dignity = chartData?.dignities[planet.planet];
             const isStrong = dignity && dignity.score > 0;
@@ -245,12 +294,10 @@ export default function CompassScreen() {
 
             return (
               <G key={planet.planet} opacity={opacity}>
-                {/* Connector line from center */}
+                {/* Connector line */}
                 <Line
-                  x1={RADAR_CENTER}
-                  y1={RADAR_CENTER}
-                  x2={px}
-                  y2={py}
+                  x1={RADAR_CENTER} y1={RADAR_CENTER}
+                  x2={px} y2={py}
                   stroke={color + '30'}
                   strokeWidth={0.8}
                   strokeDasharray="2,3"
@@ -265,33 +312,33 @@ export default function CompassScreen() {
                 {/* Planet dot */}
                 <Circle cx={px} cy={py} r={7} fill={color} />
                 <Circle cx={px} cy={py} r={7} fill="none" stroke={color} strokeWidth={1.5} opacity={0.4} />
-                {/* Symbol label (anti-collision offset) */}
+                {/* Symbol + Written Name (pedagogy) */}
                 <SvgText
                   x={labelX}
                   y={labelY}
                   fill={color}
-                  fontSize={16}
+                  fontSize={14}
                   fontWeight="bold"
                   textAnchor="middle"
                 >
-                  {PLANET_SYMBOLS[planet.planet]}
+                  {PLANET_SYMBOLS[planet.planet]} {PLANET_NAMES[planet.planet] ?? planet.planet}
                 </SvgText>
                 {/* Degree label */}
                 <SvgText
                   x={labelX}
-                  y={labelY + 26}
+                  y={labelY + 22}
                   fill="#6B6B6B"
                   fontSize={8}
                   textAnchor="middle"
                 >
-                  {safeNum(planet.azimuth, 0).toFixed(0)}° / {safeNum(planet.altitude, 0).toFixed(0)}°
+                  Az {safeNum(planet.azimuth, 0).toFixed(0)}° Alt {safeNum(planet.altitude, 0).toFixed(0)}°
                 </SvgText>
                 {/* Invisible tap target */}
                 <Rect
-                  x={px - 20}
-                  y={py - 20}
-                  width={40}
-                  height={40}
+                  x={px - 24}
+                  y={py - 24}
+                  width={48}
+                  height={48}
                   fill="transparent"
                   onPress={() => handlePlanetTap(planet.planet)}
                 />
@@ -303,11 +350,41 @@ export default function CompassScreen() {
     );
   }, [heading, planets, chartData, focusedPlanet]);
 
+  // AR View with vertical pitch tracking
   const renderARView = useCallback(() => {
+    // AR viewport: pitch determines which altitude band is visible
+    // pitch ≈ 0: looking at horizon (alt 0°)
+    // pitch < 0: looking up (positive altitude)
+    // pitch > 0: looking down (negative altitude)
+    const viewCenterAlt = -pitch; // Invert: tilting phone up = looking at higher altitude
+    const AR_HEIGHT = SCREEN_HEIGHT * 0.5;
+    const ALT_RANGE = 60; // Degrees visible in viewport
+
     return (
       <View style={styles.arContainer}>
         <View style={styles.arBackground}>
-          <View style={styles.arHorizon} />
+          {/* Horizon line (positioned based on pitch) */}
+          {(() => {
+            const horizonY = AR_HEIGHT / 2 + (viewCenterAlt / ALT_RANGE) * (AR_HEIGHT / 2);
+            if (horizonY >= 0 && horizonY <= AR_HEIGHT) {
+              return (
+                <View style={[styles.arHorizon, { top: horizonY }]}>
+                  <Text style={styles.arHorizonLabel}>— Horizon —</Text>
+                </View>
+              );
+            }
+            return null;
+          })()}
+
+          {/* Pitch indicator */}
+          <View style={styles.pitchIndicator}>
+            <Text style={styles.pitchText}>
+              Tilt: {pitch.toFixed(0)}° | View Alt: {viewCenterAlt.toFixed(0)}°
+            </Text>
+            <Text style={styles.pitchHint}>
+              {viewCenterAlt > 20 ? '↑ Looking at sky' : viewCenterAlt < -10 ? '↓ Looking below horizon' : '→ Looking at horizon'}
+            </Text>
+          </View>
 
           {planets.map((planet) => {
             try {
@@ -318,12 +395,18 @@ export default function CompassScreen() {
               if (relAz < -180) relAz += 360;
               if (Math.abs(relAz) > 60) return null;
 
+              // 3D Projection: Y-position corresponds to altitude relative to pitch
+              const altDiff = alt - viewCenterAlt;
+              if (Math.abs(altDiff) > ALT_RANGE / 2) return null; // Out of viewport
+
               const screenX = safeNum((SCREEN_WIDTH / 2) + (relAz / 60) * (SCREEN_WIDTH / 2), SCREEN_WIDTH / 2);
-              const screenY = safeNum(200 - (alt / 90) * 180, 200);
+              // Higher altitude = higher on screen (lower Y value)
+              const screenY = safeNum((AR_HEIGHT / 2) - (altDiff / (ALT_RANGE / 2)) * (AR_HEIGHT / 2), AR_HEIGHT / 2);
               const color = PLANET_COLORS[planet.planet] || '#E0E0E0';
               const dignity = chartData?.dignities[planet.planet];
               const isStrong = dignity && dignity.score > 0;
               const isFocused = focusedPlanet === null || focusedPlanet === planet.planet;
+              const isAboveHorizon = alt >= 0;
 
               return (
                 <Pressable
@@ -332,7 +415,7 @@ export default function CompassScreen() {
                   style={[
                     styles.arPlanet,
                     {
-                      left: screenX - 20,
+                      left: screenX - 30,
                       top: screenY - 20,
                       opacity: isFocused ? 1 : 0.3,
                       zIndex: 10,
@@ -345,14 +428,16 @@ export default function CompassScreen() {
                   <Text style={[styles.arSymbol, { color }]}>
                     {PLANET_SYMBOLS[planet.planet]}
                   </Text>
-                  <Text style={[styles.arLabel, { color }]}>{planet.planet}</Text>
-                  <Text style={styles.arDegree}>
-                    {az.toFixed(0)}° / {alt.toFixed(0)}°
+                  <Text style={[styles.arName, { color }]}>
+                    {PLANET_NAMES[planet.planet] ?? planet.planet}
+                  </Text>
+                  <Text style={[styles.arDegree, !isAboveHorizon && { color: '#F59E0B80' }]}>
+                    {az.toFixed(0)}° / {alt >= 0 ? '+' : ''}{alt.toFixed(0)}°
                   </Text>
                 </Pressable>
               );
             } catch {
-              return null; // Skip planet on error
+              return null;
             }
           })}
 
@@ -362,7 +447,7 @@ export default function CompassScreen() {
         </View>
       </View>
     );
-  }, [heading, planets, chartData, focusedPlanet]);
+  }, [heading, pitch, planets, chartData, focusedPlanet]);
 
   return (
     <ScreenContainer>
@@ -406,7 +491,7 @@ export default function CompassScreen() {
         {!sensorAvailable && (
           <View style={styles.warningBox}>
             <Text style={styles.warningText}>
-              ⚠ Compass sensors not available. Showing simulated positions.
+              Compass sensors not available. Showing simulated positions.
             </Text>
           </View>
         )}
@@ -427,24 +512,69 @@ export default function CompassScreen() {
         {/* Main View */}
         {viewMode === 'radar' ? renderRadarView() : renderARView()}
 
-        {/* Planet Legend */}
+        {/* Planet Legend with info buttons */}
         <View style={styles.legend}>
           {planets.map((p) => {
             const isFocused = focusedPlanet === null || focusedPlanet === p.planet;
             return (
-              <Pressable
-                key={p.planet}
-                onPress={() => handlePlanetTap(p.planet)}
-                style={[styles.legendItem, { opacity: isFocused ? 1 : 0.4 }]}
-              >
-                <View style={[styles.legendDot, { backgroundColor: PLANET_COLORS[p.planet] }]} />
-                <Text style={styles.legendText}>{PLANET_SYMBOLS[p.planet]}</Text>
-                <Text style={styles.legendAz}>{safeNum(p.azimuth, 0).toFixed(0)}°</Text>
-              </Pressable>
+              <View key={p.planet} style={[styles.legendItem, { opacity: isFocused ? 1 : 0.4 }]}>
+                <Pressable
+                  onPress={() => handlePlanetTap(p.planet)}
+                  style={styles.legendPressable}
+                >
+                  <View style={[styles.legendDot, { backgroundColor: PLANET_COLORS[p.planet] }]} />
+                  <Text style={styles.legendText}>{PLANET_SYMBOLS[p.planet]}</Text>
+                  <Text style={styles.legendName}>{PLANET_NAMES[p.planet]}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => handlePlanetInfo(p.planet)}
+                  style={({ pressed }) => [styles.infoBtn, pressed && { opacity: 0.5 }]}
+                >
+                  <Text style={styles.infoBtnText}>i</Text>
+                </Pressable>
+              </View>
             );
           })}
         </View>
       </View>
+
+      {/* ===== Planet Info Modal ===== */}
+      <Modal
+        visible={!!infoPlanet}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setInfoPlanet(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setInfoPlanet(null)}>
+          <View style={styles.modalContent}>
+            {infoPlanet && PLANET_INFO[infoPlanet] && (
+              <>
+                <Text style={[styles.modalSymbol, { color: PLANET_COLORS[infoPlanet as Planet] }]}>
+                  {PLANET_SYMBOLS[infoPlanet as Planet]}
+                </Text>
+                <Text style={styles.modalTitle}>{infoPlanet}</Text>
+                <View style={styles.modalRow}>
+                  <View style={styles.modalTag}>
+                    <Text style={styles.modalTagLabel}>Element</Text>
+                    <Text style={styles.modalTagValue}>{PLANET_INFO[infoPlanet].element}</Text>
+                  </View>
+                  <View style={styles.modalTag}>
+                    <Text style={styles.modalTagLabel}>Principle</Text>
+                    <Text style={styles.modalTagValue}>{PLANET_INFO[infoPlanet].principle}</Text>
+                  </View>
+                </View>
+                <Text style={styles.modalDesc}>{PLANET_INFO[infoPlanet].description}</Text>
+                <Pressable
+                  onPress={() => setInfoPlanet(null)}
+                  style={({ pressed }) => [styles.modalClose, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={styles.modalCloseText}>Close</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </Pressable>
+      </Modal>
     </ScreenContainer>
   );
 }
@@ -481,19 +611,32 @@ const styles = StyleSheet.create({
   focusText: { fontSize: 13, fontWeight: '600' },
   focusDismiss: { fontSize: 10, color: '#6B6B6B' },
   radarContainer: { alignItems: 'center', marginTop: 12 },
+
+  // AR View
   arContainer: { flex: 1, marginTop: 12 },
   arBackground: {
     flex: 1, backgroundColor: '#080808', borderRadius: 12, borderWidth: 1,
     borderColor: '#1A1A1A', overflow: 'hidden', position: 'relative', minHeight: 300,
   },
   arHorizon: {
-    position: 'absolute', top: '50%', left: 0, right: 0, height: 1,
-    backgroundColor: '#1A1A1A', zIndex: 1,
+    position: 'absolute', left: 0, right: 0, alignItems: 'center',
+    zIndex: 2,
   },
-  arPlanet: { position: 'absolute', alignItems: 'center', width: 40, zIndex: 10 },
-  arGlow: { position: 'absolute', width: 40, height: 40, borderRadius: 20, top: 0 },
+  arHorizonLabel: {
+    fontFamily: 'JetBrainsMono', fontSize: 9, color: '#6B6B6B40',
+    letterSpacing: 2, borderTopWidth: 1, borderTopColor: '#1A1A1A',
+    paddingTop: 2, paddingHorizontal: 8,
+  },
+  pitchIndicator: {
+    position: 'absolute', top: 8, left: 8, right: 8,
+    zIndex: 20, alignItems: 'center',
+  },
+  pitchText: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B' },
+  pitchHint: { fontSize: 9, color: '#6B6B6B60', marginTop: 2 },
+  arPlanet: { position: 'absolute', alignItems: 'center', width: 60, zIndex: 10 },
+  arGlow: { position: 'absolute', width: 50, height: 50, borderRadius: 25, top: -5, left: 5 },
   arSymbol: { fontSize: 22, textAlign: 'center' },
-  arLabel: { fontSize: 9, fontWeight: '600', textAlign: 'center' },
+  arName: { fontSize: 9, fontWeight: '600', textAlign: 'center' },
   arDegree: { fontFamily: 'JetBrainsMono', fontSize: 8, color: '#6B6B6B', textAlign: 'center' },
   crosshairH: {
     position: 'absolute', top: '50%', left: '45%', right: '45%',
@@ -503,12 +646,45 @@ const styles = StyleSheet.create({
     position: 'absolute', left: '50%', top: '45%', bottom: '45%',
     width: 1, backgroundColor: '#D4AF3740',
   },
+
+  // Legend with info buttons
   legend: {
     flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center',
-    gap: 12, paddingVertical: 12,
+    gap: 8, paddingVertical: 12,
   },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  legendPressable: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   legendDot: { width: 6, height: 6, borderRadius: 3 },
   legendText: { fontSize: 14, color: '#E0E0E0' },
-  legendAz: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B' },
+  legendName: { fontSize: 10, color: '#6B6B6B' },
+  infoBtn: {
+    width: 16, height: 16, borderRadius: 8, borderWidth: 1,
+    borderColor: '#6B6B6B40', alignItems: 'center', justifyContent: 'center',
+  },
+  infoBtnText: { fontSize: 9, color: '#6B6B6B', fontWeight: '700', fontStyle: 'italic' },
+
+  // Planet Info Modal
+  modalOverlay: {
+    flex: 1, backgroundColor: '#00000090', justifyContent: 'center',
+    alignItems: 'center', padding: 32,
+  },
+  modalContent: {
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
+    borderRadius: 16, padding: 24, width: '100%', maxWidth: 340, alignItems: 'center',
+  },
+  modalSymbol: { fontSize: 40 },
+  modalTitle: { fontFamily: 'Cinzel', fontSize: 20, color: '#E0E0E0', marginTop: 8, letterSpacing: 2 },
+  modalRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
+  modalTag: {
+    flex: 1, backgroundColor: '#080808', borderWidth: 1, borderColor: '#1A1A1A',
+    borderRadius: 8, padding: 10, alignItems: 'center',
+  },
+  modalTagLabel: { fontFamily: 'JetBrainsMono', fontSize: 9, color: '#6B6B6B', letterSpacing: 1 },
+  modalTagValue: { fontSize: 13, color: '#D4AF37', fontWeight: '600', marginTop: 4 },
+  modalDesc: { fontSize: 13, color: '#E0E0E0', lineHeight: 20, marginTop: 16, textAlign: 'center' },
+  modalClose: {
+    marginTop: 20, paddingHorizontal: 24, paddingVertical: 10,
+    borderRadius: 20, borderWidth: 1, borderColor: '#1A1A1A',
+  },
+  modalCloseText: { fontSize: 13, color: '#6B6B6B' },
 });

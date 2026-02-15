@@ -6,6 +6,8 @@ import { create } from 'zustand';
 import { Ritual, RitualStep, RitualPlayerState } from './types';
 import ritualsData from './rituals_db.json';
 
+type RitualIntent = 'BANISH' | 'INVOKE';
+
 interface RitualState {
   rituals: Ritual[];
   currentRitual: Ritual | null;
@@ -13,10 +15,12 @@ interface RitualState {
   playerState: RitualPlayerState;
   isDirectionLocked: boolean;
   isTracingDetected: boolean;
+  intent: RitualIntent;
 
   // Actions
   loadRituals: () => void;
   selectRitual: (id: string) => void;
+  setIntent: (intent: RitualIntent) => void;
   startRitual: () => void;
   nextStep: () => void;
   prevStep: () => void;
@@ -35,6 +39,7 @@ export const useRitualStore = create<RitualState>((set, get) => ({
   playerState: 'idle',
   isDirectionLocked: false,
   isTracingDetected: false,
+  intent: 'BANISH' as RitualIntent,
 
   loadRituals: () => {
     set({ rituals: ritualsData as Ritual[] });
@@ -43,6 +48,10 @@ export const useRitualStore = create<RitualState>((set, get) => ({
   selectRitual: (id: string) => {
     const ritual = get().rituals.find(r => r.id === id) || null;
     set({ currentRitual: ritual, currentStepIndex: 0, playerState: 'idle' });
+  },
+
+  setIntent: (intent: RitualIntent) => {
+    set({ intent });
   },
 
   startRitual: () => {
