@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Text, View, ScrollView, StyleSheet, Platform, Pressable, Dimensions, TextInput, Modal } from 'react-native';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
+
 import { ScreenContainer } from '@/components/screen-container';
 import { PaywallModal, ProBadge } from '@/components/paywall-modal';
 import { useAstroStore } from '@/lib/astro/store';
@@ -12,6 +12,9 @@ import { getRulerRecommendation, getRulerOfDay, DAY_RULERS } from '@/lib/astro/r
 import { calculateEventHorizon, getNextMajorEvent, searchEvents, AstroEvent } from '@/lib/astro/events';
 import { getExactAspects, Aspect } from '@/lib/astro/aspects';
 import { PLANET_SYMBOLS, PLANET_COLORS, ZODIAC_SYMBOLS, Planet } from '@/lib/astro/types';
+import { calculatePowerRating, getPowerLabel } from '@/lib/astro/power-rating';
+import { useNatalStore } from '@/lib/store/natal-store';
+import { useRuneWalletStore } from '@/lib/store/rune-wallet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -34,10 +37,13 @@ export default function HomeScreen() {
   const recalculate = useAstroStore((s) => s.recalculate);
   const date = useAstroStore((s) => s.date);
   const setDate = useAstroStore((s) => s.setDate);
-  const router = useRouter();
 
   const tier = useProStore((s) => s.tier);
   const isFeatureUnlocked = useProStore((s) => s.isFeatureUnlocked);
+
+  const natalChart = useNatalStore((s) => s.natalChart);
+  const activeRuneId = useRuneWalletStore((s) => s.activeRuneId);
+  const getActiveRune = useRuneWalletStore((s) => s.getActiveRune);
 
   const [showPaywall, setShowPaywall] = useState(false);
   const [paywallFeature, setPaywallFeature] = useState<string | undefined>();
@@ -45,6 +51,8 @@ export default function HomeScreen() {
   const [showEventSearch, setShowEventSearch] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<AstroEvent | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [tooltipText, setTooltipText] = useState<string | null>(null);
+  const [selectedAspectExplain, setSelectedAspectExplain] = useState<string | null>(null);
 
   // GPS location on mount
   useEffect(() => {
@@ -148,12 +156,25 @@ export default function HomeScreen() {
     return hp === 'Mars' || hp === 'Saturn' || hp === 'Jupiter';
   }, [planetaryHour]);
 
-  const handleQuickAction = (tab: string) => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    router.push(`/(tabs)/${tab}` as any);
-  };
+  // Magical Power Rating
+  const powerRating = useMemo(() => {
+    if (!chartData) return null;
+    const activeRune = getActiveRune();
+    const runeDignity = activeRune?.dignityScore ?? 0;
+    return calculatePowerRating(
+      chartData,
+      natalChart,
+      runeDignity,
+      planetaryHour.currentHour.planet,
+    );
+  }, [chartData, natalChart, activeRuneId, planetaryHour]);
+
+  const powerLabel = useMemo(() => {
+    if (!powerRating) return { label: 'Unknown', color: '#6B6B6B' };
+    return getPowerLabel(powerRating.totalScore);
+  }, [powerRating]);
+
+
 
   const handleProFeature = (featureId: string) => {
     if (!isFeatureUnlocked(featureId)) {
@@ -214,6 +235,39 @@ export default function HomeScreen() {
           <View style={styles.liveDot} />
           <Text style={styles.liveText}>LIVE · Auto-refresh 30s</Text>
         </View>
+
+        {/* ===== Astral Potency Gauge ===== */}
+        {powerRating && (
+          <View style={[styles.powerCard, { borderColor: powerLabel.color + '40' }]}>
+            <Text style={styles.powerHeader}>ASTRAL POTENCY</Text>
+            <View style={styles.powerGaugeRow}>
+              <View style={styles.powerGaugeTrack}>
+                <View
+                  style={[
+                    styles.powerGaugeFill,
+                    {
+                      width: `${powerRating.totalScore}%`,
+                      backgroundColor: powerLabel.color,
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={[styles.powerPercent, { color: powerLabel.color }]}>
+                {powerRating.totalScore}%
+              </Text>
+            </View>
+            <Text style={[styles.powerLabel, { color: powerLabel.color }]}>
+              {powerLabel.label}
+            </Text>
+            {powerRating.details.length > 0 && (
+              <View style={styles.powerDetails}>
+                {powerRating.details.slice(0, 4).map((d, i) => (
+                  <Text key={i} style={styles.powerDetail}>{d}</Text>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* ===== Event Horizon Warning Widget ===== */}
         {eventHorizon.nextEvent && daysUntilEvent !== null && daysUntilEvent <= 30 && (
@@ -355,7 +409,21 @@ export default function HomeScreen() {
           <>
             <Text style={styles.sectionTitle}>Exact Aspects</Text>
             {exactAspects.slice(0, 3).map((asp, i) => (
-              <View key={i} style={styles.aspectHighlight}>
+              <Pressable
+                key={i}
+                onPress={() => {
+                  if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  const aspectExplanations: Record<string, string> = {
+                    Conjunction: `${asp.planet1} and ${asp.planet2} merge their energies. This is a powerful fusion – their combined influence amplifies both planets' qualities.`,
+                    Opposition: `${asp.planet1} and ${asp.planet2} face off across the sky. This creates tension and awareness – a push-pull dynamic requiring balance.`,
+                    Trine: `${asp.planet1} and ${asp.planet2} flow harmoniously. This is a gift aspect – their energies support each other effortlessly.`,
+                    Square: `${asp.planet1} and ${asp.planet2} clash at 90°. This creates friction and challenge – but also the drive for growth and transformation.`,
+                    Sextile: `${asp.planet1} and ${asp.planet2} cooperate gently. This is an opportunity aspect – their energies blend well with a little effort.`,
+                  };
+                  setSelectedAspectExplain(aspectExplanations[asp.type] || `${asp.type}: ${asp.planet1} and ${asp.planet2}`);
+                }}
+                style={({ pressed }) => [styles.aspectHighlight, pressed && { opacity: 0.7 }]}
+              >
                 <Text style={styles.aspectSymbols}>
                   {PLANET_SYMBOLS[asp.planet1]} {asp.symbol} {PLANET_SYMBOLS[asp.planet2]}
                 </Text>
@@ -363,7 +431,7 @@ export default function HomeScreen() {
                   <Text style={styles.aspectType}>{asp.type}</Text>
                   <Text style={styles.aspectOrb}>{asp.orb.toFixed(1)}° orb</Text>
                 </View>
-              </View>
+              </Pressable>
             ))}
           </>
         )}
@@ -418,38 +486,7 @@ export default function HomeScreen() {
           </>
         )}
 
-        {/* Quick Actions */}
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.quickGrid}>
-          <Pressable
-            onPress={() => handleQuickAction('sanctum')}
-            style={({ pressed }) => [styles.quickCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
-          >
-            <Text style={styles.quickIcon}>📖</Text>
-            <Text style={styles.quickLabel}>Ritual Mode</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => handleQuickAction('compass')}
-            style={({ pressed }) => [styles.quickCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
-          >
-            <Text style={styles.quickIcon}>🧭</Text>
-            <Text style={styles.quickLabel}>Compass</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => handleQuickAction('runes')}
-            style={({ pressed }) => [styles.quickCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
-          >
-            <Text style={styles.quickIcon}>ᚠ</Text>
-            <Text style={styles.quickLabel}>Runes</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => handleQuickAction('chart')}
-            style={({ pressed }) => [styles.quickCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
-          >
-            <Text style={styles.quickIcon}>☉</Text>
-            <Text style={styles.quickLabel}>Full Chart</Text>
-          </Pressable>
-        </View>
+
 
         {/* ===== Event Horizon Search (Pro) ===== */}
         <View style={styles.eventSection}>
@@ -510,15 +547,26 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Arabic Parts */}
+        {/* Arabic Parts – Tappable */}
         <View style={styles.partsRow}>
           {chartData.arabicParts.map((part) => (
-            <View key={part.name} style={styles.partBadge}>
+            <Pressable
+              key={part.name}
+              onPress={() => {
+                if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                const explanations: Record<string, string> = {
+                  'Pars Fortunae': 'The Part of Fortune indicates where material luck and worldly success flow most naturally. It is calculated from the Ascendant, Sun, and Moon positions.',
+                  'Pars Spiritus': 'The Part of Spirit reveals your soul\'s purpose and spiritual calling. It is the inverse of the Part of Fortune, emphasizing conscious will over fate.',
+                };
+                setTooltipText(explanations[part.name] || `${part.name} at ${part.signDegree}° ${part.sign}`);
+              }}
+              style={({ pressed }) => [styles.partBadge, pressed && { opacity: 0.7, borderColor: '#D4AF37' }]}
+            >
               <Text style={styles.partName}>{part.name}</Text>
               <Text style={styles.partValue}>
                 {ZODIAC_SYMBOLS[part.sign]} {part.signDegree}°
               </Text>
-            </View>
+            </Pressable>
           ))}
         </View>
       </ScrollView>
@@ -612,6 +660,48 @@ export default function HomeScreen() {
               </>
             )}
           </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Tooltip Modal */}
+      <Modal
+        visible={!!tooltipText}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTooltipText(null)}
+      >
+        <Pressable style={styles.tooltipOverlay} onPress={() => setTooltipText(null)}>
+          <View style={styles.tooltipBox}>
+            <Text style={styles.tooltipTitle}>Explanation</Text>
+            <Text style={styles.tooltipContent}>{tooltipText}</Text>
+            <Pressable
+              onPress={() => setTooltipText(null)}
+              style={({ pressed }) => [styles.tooltipClose, pressed && { opacity: 0.8 }]}
+            >
+              <Text style={styles.tooltipCloseText}>Got it</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Aspect Explanation Modal */}
+      <Modal
+        visible={!!selectedAspectExplain}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedAspectExplain(null)}
+      >
+        <Pressable style={styles.tooltipOverlay} onPress={() => setSelectedAspectExplain(null)}>
+          <View style={styles.tooltipBox}>
+            <Text style={styles.tooltipTitle}>Aspect Energy</Text>
+            <Text style={styles.tooltipContent}>{selectedAspectExplain}</Text>
+            <Pressable
+              onPress={() => setSelectedAspectExplain(null)}
+              style={({ pressed }) => [styles.tooltipClose, pressed && { opacity: 0.8 }]}
+            >
+              <Text style={styles.tooltipCloseText}>Got it</Text>
+            </Pressable>
+          </View>
         </Pressable>
       </Modal>
 
@@ -728,14 +818,7 @@ const styles = StyleSheet.create({
   verdictScore: { fontFamily: 'JetBrainsMono', fontSize: 22, fontWeight: '700' },
   verdictInterpretation: { fontSize: 11, color: '#6B6B6B', marginTop: 8, fontStyle: 'italic', lineHeight: 16 },
 
-  // Quick Actions
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  quickCard: {
-    width: (SCREEN_WIDTH - 42) / 2, backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
-    borderRadius: 12, paddingVertical: 18, alignItems: 'center', gap: 6,
-  },
-  quickIcon: { fontSize: 28 },
-  quickLabel: { fontSize: 12, color: '#E0E0E0', fontWeight: '600', letterSpacing: 0.5 },
+
 
   // Event Horizon
   eventSection: { marginTop: 8 },
@@ -808,6 +891,63 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginTop: 20,
   },
   modalCloseBtnText: { color: '#050505', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
+
+  // Tooltip
+  tooltipOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center',
+    alignItems: 'center', padding: 32,
+  },
+  tooltipBox: {
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#D4AF3730',
+    borderRadius: 16, padding: 24, maxWidth: 340, width: '100%',
+  },
+  tooltipTitle: {
+    fontFamily: 'Cinzel', fontSize: 16, color: '#D4AF37',
+    textAlign: 'center', letterSpacing: 2, marginBottom: 12,
+  },
+  tooltipContent: {
+    fontSize: 13, color: '#E0E0E0', lineHeight: 20, textAlign: 'center',
+  },
+  tooltipClose: {
+    backgroundColor: '#D4AF37', borderRadius: 20, paddingVertical: 10,
+    alignItems: 'center', marginTop: 16,
+  },
+  tooltipCloseText: { color: '#050505', fontSize: 13, fontWeight: '700' },
+
+  // Power Rating Gauge
+  powerCard: {
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 14,
+    padding: 16, marginTop: 12,
+  },
+  powerHeader: {
+    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B',
+    letterSpacing: 2, marginBottom: 10, textAlign: 'center',
+  },
+  powerGaugeRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+  },
+  powerGaugeTrack: {
+    flex: 1, height: 8, backgroundColor: '#1A1A1A', borderRadius: 4,
+    overflow: 'hidden',
+  },
+  powerGaugeFill: {
+    height: '100%', borderRadius: 4,
+  },
+  powerPercent: {
+    fontFamily: 'JetBrainsMono', fontSize: 18, fontWeight: '700',
+    width: 50, textAlign: 'right',
+  },
+  powerLabel: {
+    fontFamily: 'Cinzel', fontSize: 14, textAlign: 'center',
+    marginTop: 8, letterSpacing: 3,
+  },
+  powerDetails: {
+    marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#1A1A1A',
+    gap: 3,
+  },
+  powerDetail: {
+    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', lineHeight: 16,
+  },
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { fontSize: 16, color: '#E0E0E0' },

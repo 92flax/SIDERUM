@@ -22,8 +22,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
 import { useProStore } from "@/lib/store/pro-store";
-import { useRuneWalletStore } from "@/lib/store/rune-wallet";
-import { AdeptsSeal } from "@/components/adepts-seal";
+import { useRuneWalletStore } from '@/lib/store/rune-wallet';
+import { useNatalStore } from '@/lib/store/natal-store';
+import { AdeptsSeal } from '@/components/adepts-seal';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -72,9 +73,10 @@ export default function RootLayout() {
     initManusRuntime();
   }, []);
 
-  // Load subscription state and wallet
+  // Load subscription state, wallet, and natal data
   useEffect(() => {
     useProStore.getState().loadSubscription();
+    useNatalStore.getState().loadNatalData();
   }, []);
 
   useEffect(() => {

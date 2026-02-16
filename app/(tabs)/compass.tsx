@@ -123,7 +123,7 @@ export default function CompassScreen() {
     return () => { magSub?.remove(); };
   }, []);
 
-  // DeviceMotion for pitch (vertical tilt)
+  // DeviceMotion for pitch (vertical tilt) using gravity vector
   useEffect(() => {
     if (Platform.OS === ('web' as string)) return;
 
@@ -136,11 +136,25 @@ export default function CompassScreen() {
 
         DeviceMotion.setUpdateInterval(100);
         motionSub = DeviceMotion.addListener((data) => {
-          if (data.rotation) {
-            // beta = pitch: phone tilted forward/backward
-            // When phone is vertical (normal hold), beta ≈ 0
-            // Tilted up toward sky: beta goes negative
-            // Tilted down toward ground: beta goes positive
+          // Use gravity vector for stable pitch calculation
+          // This keeps the horizon at eye level regardless of phone tilt
+          if (data.accelerationIncludingGravity) {
+            const { x, y, z } = data.accelerationIncludingGravity;
+            // When phone is held upright (portrait):
+            //   y ≈ -9.8 (gravity pulling down along Y)
+            //   z ≈ 0 (phone face pointing at user)
+            // When phone is tilted up (looking at sky):
+            //   y decreases, z becomes more negative
+            // When phone is tilted down (looking at ground):
+            //   y decreases, z becomes more positive
+            // Pitch = angle between phone's Y-axis and gravity
+            const pitchRad = Math.atan2(safeNum(z, 0), -safeNum(y, -9.8));
+            const pitchDeg = pitchRad * (180 / Math.PI);
+            // pitchDeg: 0° = phone vertical (horizon), +90° = phone flat face up (sky)
+            // -90° = phone flat face down (ground)
+            setPitch(safeNum(pitchDeg, 0));
+          } else if (data.rotation) {
+            // Fallback to rotation if gravity not available
             const betaDeg = safeNum((data.rotation.beta * 180) / Math.PI, 0);
             setPitch(betaDeg);
           }
@@ -353,10 +367,11 @@ export default function CompassScreen() {
   // AR View with vertical pitch tracking
   const renderARView = useCallback(() => {
     // AR viewport: pitch determines which altitude band is visible
-    // pitch ≈ 0: looking at horizon (alt 0°)
-    // pitch < 0: looking up (positive altitude)
-    // pitch > 0: looking down (negative altitude)
-    const viewCenterAlt = -pitch; // Invert: tilting phone up = looking at higher altitude
+    // With gravity-based pitch:
+    //   pitch ≈ 0°: phone vertical = looking at horizon
+    //   pitch > 0°: phone tilted back = looking at sky (positive altitude)
+    //   pitch < 0°: phone tilted forward = looking at ground (negative altitude)
+    const viewCenterAlt = pitch; // Direct mapping: positive pitch = looking up
     const AR_HEIGHT = SCREEN_HEIGHT * 0.5;
     const ALT_RANGE = 60; // Degrees visible in viewport
 

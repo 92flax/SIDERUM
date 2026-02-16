@@ -1,20 +1,35 @@
 // ============================================================
-// ÆONIS – Adept's Seal Onboarding
-// First-launch: Intention input → Master Rune generation → Infuse (tap & hold)
+// ÆONIS – Adept's Seal Onboarding (Extended)
+// Phase 1: Multi-select Intentions
+// Phase 2: Birth Data Input (Date, Time, Place)
+// Phase 3: Master Rune Generation → Infuse (tap & hold)
 // ============================================================
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Text, View, StyleSheet, Pressable, TextInput, Dimensions,
-  Platform, Animated, Easing,
+  Platform, Animated, Easing, ScrollView, Alert, KeyboardAvoidingView,
 } from 'react-native';
 import Svg, { Line, Path, Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { ELDER_FUTHARK, generateBindruneData } from '@/lib/runes/futhark';
 import { useRuneWalletStore } from '@/lib/store/rune-wallet';
+import { useNatalStore, UserNatalData } from '@/lib/store/natal-store';
 
 const { width: SW, height: SH } = Dimensions.get('window');
-const RUNE_SIZE = Math.min(SW * 0.65, 280);
+const RUNE_SIZE = Math.min(SW * 0.6, 260);
+
+// All available intentions
+const ALL_INTENTIONS = [
+  { key: 'protection', label: 'Protection', icon: '🛡' },
+  { key: 'wisdom', label: 'Wisdom', icon: '📖' },
+  { key: 'power', label: 'Power', icon: '⚡' },
+  { key: 'healing', label: 'Healing', icon: '✦' },
+  { key: 'wealth', label: 'Wealth', icon: '◆' },
+  { key: 'love', label: 'Love', icon: '♡' },
+  { key: 'transformation', label: 'Transformation', icon: '⟐' },
+  { key: 'divination', label: 'Divination', icon: '☽' },
+];
 
 // Intention → Rune keyword mapping
 const INTENTION_KEYWORDS: Record<string, string[]> = {
@@ -25,56 +40,60 @@ const INTENTION_KEYWORDS: Record<string, string[]> = {
   power: ['power', 'strength', 'courage', 'victory', 'force'],
   healing: ['healing', 'health', 'wholeness', 'renewal', 'growth'],
   transformation: ['transformation', 'change', 'journey', 'evolution', 'rebirth'],
+  divination: ['divination', 'insight', 'mystery', 'knowledge', 'wisdom'],
 };
 
-function matchRunesForIntention(intention: string): typeof ELDER_FUTHARK[number][] {
-  const lower = intention.toLowerCase().trim();
-
-  // Find matching keyword category
-  let bestKeywords: string[] = [];
-  for (const [category, keywords] of Object.entries(INTENTION_KEYWORDS)) {
-    if (lower.includes(category) || keywords.some(k => lower.includes(k))) {
-      bestKeywords = keywords;
-      break;
-    }
+function matchRunesForIntentions(intentions: string[]): typeof ELDER_FUTHARK[number][] {
+  // Combine all keywords from selected intentions
+  const allKeywords: string[] = [];
+  for (const intent of intentions) {
+    const kws = INTENTION_KEYWORDS[intent] || [];
+    allKeywords.push(...kws);
   }
 
-  // If no category match, use the raw words
-  if (bestKeywords.length === 0) {
-    bestKeywords = lower.split(/\s+/).filter(w => w.length > 2);
+  if (allKeywords.length === 0) {
+    allKeywords.push('protection', 'strength', 'wisdom');
   }
 
   // Score each rune by keyword overlap
   const scored = ELDER_FUTHARK.map(rune => {
     let score = 0;
     for (const kw of rune.keywords) {
-      if (bestKeywords.some(bk => kw.includes(bk) || bk.includes(kw))) {
+      if (allKeywords.some(bk => kw.includes(bk) || bk.includes(kw))) {
         score += 3;
       }
     }
-    // Add a small deterministic hash based on intention + rune name for variety
-    const hash = (intention.length * rune.name.charCodeAt(0)) % 10;
+    // Add deterministic hash for variety
+    const hash = (intentions.length * rune.name.charCodeAt(0)) % 10;
     score += hash * 0.1;
     return { rune, score };
   });
 
   scored.sort((a, b) => b.score - a.score);
-
   // Pick top 3 unique runes
   return scored.slice(0, 3).map(s => s.rune);
 }
 
-type SealPhase = 'intention' | 'generating' | 'reveal' | 'infuse' | 'complete';
+type SealPhase = 'intentions' | 'birthdata' | 'generating' | 'reveal' | 'infuse' | 'complete';
 
 export function AdeptsSeal({ onComplete }: { onComplete: () => void }) {
-  const [phase, setPhase] = useState<SealPhase>('intention');
-  const [intention, setIntention] = useState('');
+  const [phase, setPhase] = useState<SealPhase>('intentions');
+  const [selectedIntentions, setSelectedIntentions] = useState<string[]>([]);
   const [selectedRunes, setSelectedRunes] = useState<typeof ELDER_FUTHARK[number][]>([]);
   const [infuseProgress, setInfuseProgress] = useState(0);
   const infuseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Birth data fields
+  const [birthDate, setBirthDate] = useState('');
+  const [birthTime, setBirthTime] = useState('');
+  const [birthPlace, setBirthPlace] = useState('');
+  const [birthLat, setBirthLat] = useState('');
+  const [birthLon, setBirthLon] = useState('');
+  const [isGeocoding, setIsGeocoding] = useState(false);
+
   const setMasterRune = useRuneWalletStore((s) => s.setMasterRune);
   const completeSeal = useRuneWalletStore((s) => s.completeSeal);
+  const setNatalData = useNatalStore((s) => s.setNatalData);
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -83,6 +102,7 @@ export function AdeptsSeal({ onComplete }: { onComplete: () => void }) {
   const rotateAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    fadeAnim.setValue(0);
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 800,
@@ -114,7 +134,6 @@ export function AdeptsSeal({ onComplete }: { onComplete: () => void }) {
         })
       ).start();
 
-      // After 2.5s, reveal the rune
       const timer = setTimeout(() => {
         setPhase('reveal');
         fadeAnim.setValue(0);
@@ -128,22 +147,82 @@ export function AdeptsSeal({ onComplete }: { onComplete: () => void }) {
     }
   }, [phase]);
 
-  const handleGenerateRune = useCallback(() => {
-    if (!intention.trim()) return;
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const toggleIntention = useCallback((key: string) => {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedIntentions(prev => {
+      if (prev.includes(key)) return prev.filter(k => k !== key);
+      if (prev.length >= 4) return prev; // Max 4 selections
+      return [...prev, key];
+    });
+  }, []);
+
+  const handleGeocodePlace = useCallback(async () => {
+    if (!birthPlace.trim()) return;
+    setIsGeocoding(true);
+    try {
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(birthPlace)}&limit=1`,
+        { headers: { 'User-Agent': 'AEONIS-App/1.0' } }
+      );
+      const data = await resp.json();
+      if (data.length > 0) {
+        setBirthLat(parseFloat(data[0].lat).toFixed(4));
+        setBirthLon(parseFloat(data[0].lon).toFixed(4));
+      }
+    } catch {}
+    setIsGeocoding(false);
+  }, [birthPlace]);
+
+  const handleProceedToBirthData = useCallback(() => {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setPhase('birthdata');
+  }, []);
+
+  const handleProceedToForge = useCallback(async () => {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Save birth data if provided
+    if (birthDate && birthLat && birthLon) {
+      const natalData: UserNatalData = {
+        dateOfBirth: birthDate,
+        timeOfBirth: birthTime || '12:00',
+        placeOfBirth: birthPlace || 'Unknown',
+        latitude: parseFloat(birthLat) || 0,
+        longitude: parseFloat(birthLon) || 0,
+      };
+      await setNatalData(natalData);
     }
-    const runes = matchRunesForIntention(intention);
+
+    // Generate runes from intentions
+    const intentionStr = selectedIntentions.length > 0
+      ? selectedIntentions.join(' ')
+      : 'protection';
+    const runes = matchRunesForIntentions(
+      selectedIntentions.length > 0 ? selectedIntentions : ['protection']
+    );
     setSelectedRunes(runes);
     setPhase('generating');
-    fadeAnim.setValue(0);
     scaleAnim.setValue(0.5);
-  }, [intention]);
+  }, [selectedIntentions, birthDate, birthTime, birthPlace, birthLat, birthLon]);
+
+  const handleSkipRune = useCallback(async () => {
+    // Save birth data if provided
+    if (birthDate && birthLat && birthLon) {
+      const natalData: UserNatalData = {
+        dateOfBirth: birthDate,
+        timeOfBirth: birthTime || '12:00',
+        placeOfBirth: birthPlace || 'Unknown',
+        latitude: parseFloat(birthLat) || 0,
+        longitude: parseFloat(birthLon) || 0,
+      };
+      await setNatalData(natalData);
+    }
+    await completeSeal();
+    onComplete();
+  }, [birthDate, birthTime, birthPlace, birthLat, birthLon, onComplete]);
 
   const handleInfuseStart = useCallback(() => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    }
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setPhase('infuse');
     setInfuseProgress(0);
 
@@ -151,11 +230,9 @@ export function AdeptsSeal({ onComplete }: { onComplete: () => void }) {
     infuseTimerRef.current = setInterval(() => {
       progress += 2;
       setInfuseProgress(progress);
-
       if (progress % 20 === 0 && Platform.OS !== 'web') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-
       if (progress >= 100) {
         if (infuseTimerRef.current) clearInterval(infuseTimerRef.current);
         if (Platform.OS !== 'web') {
@@ -163,7 +240,7 @@ export function AdeptsSeal({ onComplete }: { onComplete: () => void }) {
         }
         setPhase('complete');
       }
-    }, 60); // ~3 seconds total
+    }, 60);
   }, []);
 
   const handleInfuseEnd = useCallback(() => {
@@ -181,17 +258,19 @@ export function AdeptsSeal({ onComplete }: { onComplete: () => void }) {
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
+    const intentionLabel = selectedIntentions
+      .map(k => ALL_INTENTIONS.find(i => i.key === k)?.label || k)
+      .join(' & ');
 
-    // Save Master Rune to wallet
     await setMasterRune({
-      name: `Seal of ${intention.trim()}`,
+      name: `Seal of ${intentionLabel || 'Protection'}`,
       runeNames: selectedRunes.map(r => r.name),
       keywords: selectedRunes.flatMap(r => r.keywords).slice(0, 6),
-      intention: intention.trim(),
+      intention: intentionLabel || 'Protection',
     });
     await completeSeal();
     onComplete();
-  }, [intention, selectedRunes, onComplete]);
+  }, [selectedIntentions, selectedRunes, onComplete]);
 
   // Generate bindrune SVG data
   const bindrune = selectedRunes.length > 0
@@ -203,65 +282,156 @@ export function AdeptsSeal({ onComplete }: { onComplete: () => void }) {
     outputRange: ['0deg', '360deg'],
   });
 
-  // ========== INTENTION PHASE ==========
-  if (phase === 'intention') {
+  // ========== INTENTIONS PHASE (Multi-Select) ==========
+  if (phase === 'intentions') {
     return (
       <View style={styles.container}>
-        <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-          <Text style={styles.sealSymbol}>✦</Text>
-          <Text style={styles.sealTitle}>The Adept's Seal</Text>
-          <Text style={styles.sealSubtitle}>
-            Speak your primary intention to forge your Master Rune.
-          </Text>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+            <Text style={styles.sealSymbol}>✦</Text>
+            <Text style={styles.sealTitle}>Welcome to ÆONIS</Text>
+            <Text style={styles.sealSubtitle}>
+              Choose your intentions to forge your Master Rune.{'\n'}
+              Select up to 4 paths.
+            </Text>
 
-          <View style={styles.intentionInputContainer}>
-            <Text style={styles.inputLabel}>YOUR INTENTION</Text>
-            <TextInput
-              style={styles.intentionInput}
-              placeholder="e.g. Protection, Wisdom, Transformation..."
-              placeholderTextColor="#4A4A4A"
-              value={intention}
-              onChangeText={setIntention}
-              returnKeyType="done"
-              onSubmitEditing={handleGenerateRune}
-              autoCapitalize="words"
-              maxLength={50}
-            />
-          </View>
+            <View style={styles.intentionGrid}>
+              {ALL_INTENTIONS.map(intent => {
+                const isSelected = selectedIntentions.includes(intent.key);
+                return (
+                  <Pressable
+                    key={intent.key}
+                    onPress={() => toggleIntention(intent.key)}
+                    style={({ pressed }) => [
+                      styles.intentionCard,
+                      isSelected && styles.intentionCardActive,
+                      pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] },
+                    ]}
+                  >
+                    <Text style={styles.intentionIcon}>{intent.icon}</Text>
+                    <Text style={[styles.intentionLabel, isSelected && styles.intentionLabelActive]}>
+                      {intent.label}
+                    </Text>
+                    {isSelected && <View style={styles.checkMark}><Text style={styles.checkMarkText}>✓</Text></View>}
+                  </Pressable>
+                );
+              })}
+            </View>
 
-          <View style={styles.intentionSuggestions}>
-            {['Protection', 'Wisdom', 'Power', 'Healing', 'Wealth', 'Love'].map(s => (
+            <Pressable
+              onPress={handleProceedToBirthData}
+              style={({ pressed }) => [
+                styles.forgeBtn,
+                pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
+              ]}
+            >
+              <Text style={styles.forgeBtnText}>
+                {selectedIntentions.length > 0
+                  ? `Continue (${selectedIntentions.length} selected)`
+                  : 'Continue'}
+              </Text>
+            </Pressable>
+          </Animated.View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ========== BIRTH DATA PHASE ==========
+  if (phase === 'birthdata') {
+    return (
+      <View style={styles.container}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, width: '100%' }}>
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+              {/* Skip Button */}
               <Pressable
-                key={s}
-                onPress={() => {
-                  setIntention(s);
-                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
+                onPress={handleSkipRune}
+                style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.5 }]}
+              >
+                <Text style={styles.skipBtnText}>Skip →</Text>
+              </Pressable>
+
+              <Text style={styles.sealSymbol}>☽</Text>
+              <Text style={styles.sealTitle}>Your Natal Chart</Text>
+              <Text style={styles.sealSubtitle}>
+                Enter your birth data for personalized transit calculations.{'\n'}
+                All fields are optional.
+              </Text>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>DATE OF BIRTH</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#4A4A4A"
+                  value={birthDate}
+                  onChangeText={setBirthDate}
+                  keyboardType="numbers-and-punctuation"
+                  returnKeyType="next"
+                  maxLength={10}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>TIME OF BIRTH</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="HH:MM (24h format)"
+                  placeholderTextColor="#4A4A4A"
+                  value={birthTime}
+                  onChangeText={setBirthTime}
+                  keyboardType="numbers-and-punctuation"
+                  returnKeyType="next"
+                  maxLength={5}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>PLACE OF BIRTH</Text>
+                <View style={styles.placeRow}>
+                  <TextInput
+                    style={[styles.formInput, { flex: 1 }]}
+                    placeholder="e.g. Berlin, Germany"
+                    placeholderTextColor="#4A4A4A"
+                    value={birthPlace}
+                    onChangeText={setBirthPlace}
+                    returnKeyType="search"
+                    onSubmitEditing={handleGeocodePlace}
+                  />
+                  <Pressable
+                    onPress={handleGeocodePlace}
+                    style={({ pressed }) => [styles.geocodeBtn, pressed && { opacity: 0.7 }]}
+                  >
+                    <Text style={styles.geocodeBtnText}>{isGeocoding ? '...' : '📍'}</Text>
+                  </Pressable>
+                </View>
+                {birthLat && birthLon ? (
+                  <Text style={styles.coordsText}>
+                    {birthLat}°N, {birthLon}°E
+                  </Text>
+                ) : null}
+              </View>
+
+              <Pressable
+                onPress={handleProceedToForge}
                 style={({ pressed }) => [
-                  styles.suggestionChip,
-                  intention === s && styles.suggestionChipActive,
-                  pressed && { opacity: 0.7 },
+                  styles.forgeBtn,
+                  pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
                 ]}
               >
-                <Text style={[styles.suggestionText, intention === s && styles.suggestionTextActive]}>{s}</Text>
+                <Text style={styles.forgeBtnText}>Forge Master Rune</Text>
               </Pressable>
-            ))}
-          </View>
 
-          <Pressable
-            onPress={handleGenerateRune}
-            disabled={!intention.trim()}
-            style={({ pressed }) => [
-              styles.forgeBtn,
-              !intention.trim() && styles.forgeBtnDisabled,
-              pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
-            ]}
-          >
-            <Text style={[styles.forgeBtnText, !intention.trim() && { color: '#6B6B6B' }]}>
-              Forge Master Rune
-            </Text>
-          </Pressable>
-        </Animated.View>
+              <Pressable
+                onPress={handleSkipRune}
+                style={({ pressed }) => [styles.skipRuneBtn, pressed && { opacity: 0.5 }]}
+              >
+                <Text style={styles.skipRuneBtnText}>Skip Rune Creation</Text>
+              </Pressable>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </View>
     );
   }
@@ -282,22 +452,24 @@ export function AdeptsSeal({ onComplete }: { onComplete: () => void }) {
   }
 
   // ========== REVEAL / INFUSE / COMPLETE PHASE ==========
+  const intentionLabel = selectedIntentions
+    .map(k => ALL_INTENTIONS.find(i => i.key === k)?.label || k)
+    .join(' & ') || 'Protection';
+
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
         {phase === 'complete' && <Text style={styles.completeTitle}>Seal Activated</Text>}
         {phase !== 'complete' && <Text style={styles.revealTitle}>Your Master Rune</Text>}
 
-        <Text style={styles.revealIntention}>"{intention}"</Text>
+        <Text style={styles.revealIntention}>"{intentionLabel}"</Text>
 
-        {/* Bindrune SVG */}
         <Animated.View style={[styles.runeContainer, { opacity: glowAnim }]}>
           <View style={[styles.runeGlow, phase === 'complete' && styles.runeGlowComplete]} />
         </Animated.View>
         <View style={styles.runeOverlay}>
           {bindrune && (
             <Svg width={RUNE_SIZE} height={RUNE_SIZE * 1.4} viewBox={`0 0 ${RUNE_SIZE} ${RUNE_SIZE * 1.4}`}>
-              {/* Spine */}
               {bindrune.lines.map((line, i) => (
                 <Line
                   key={`l${i}`}
@@ -307,7 +479,6 @@ export function AdeptsSeal({ onComplete }: { onComplete: () => void }) {
                   strokeLinecap="square"
                 />
               ))}
-              {/* Rune paths */}
               {bindrune.paths.map((p, i) => (
                 <Path
                   key={`p${i}`}
@@ -320,7 +491,6 @@ export function AdeptsSeal({ onComplete }: { onComplete: () => void }) {
                   opacity={0.9}
                 />
               ))}
-              {/* Center dot */}
               <Circle
                 cx={RUNE_SIZE / 2}
                 cy={RUNE_SIZE * 0.7}
@@ -355,10 +525,7 @@ export function AdeptsSeal({ onComplete }: { onComplete: () => void }) {
         )}
 
         {phase === 'infuse' && (
-          <Pressable
-            onPressOut={handleInfuseEnd}
-            style={styles.infuseBtn}
-          >
+          <Pressable onPressOut={handleInfuseEnd} style={styles.infuseBtn}>
             <View style={styles.infuseProgressBar}>
               <View style={[styles.infuseProgressFill, { width: `${infuseProgress}%` }]} />
             </View>
@@ -382,41 +549,72 @@ export function AdeptsSeal({ onComplete }: { onComplete: () => void }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1, backgroundColor: '#050505', justifyContent: 'center', alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
   },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
   content: { alignItems: 'center', width: '100%' },
+
+  // Skip button
+  skipBtn: {
+    position: 'absolute', top: -40, right: 0,
+    paddingHorizontal: 16, paddingVertical: 8,
+  },
+  skipBtnText: { fontSize: 14, color: '#6B6B6B', letterSpacing: 1 },
 
   // Intention phase
   sealSymbol: { fontSize: 48, color: '#D4AF37', marginBottom: 16 },
-  sealTitle: { fontFamily: 'Cinzel', fontSize: 26, color: '#D4AF37', letterSpacing: 4, textAlign: 'center' },
-  sealSubtitle: { fontSize: 14, color: '#6B6B6B', textAlign: 'center', marginTop: 12, lineHeight: 22, paddingHorizontal: 16 },
+  sealTitle: { fontFamily: 'Cinzel', fontSize: 24, color: '#D4AF37', letterSpacing: 4, textAlign: 'center' },
+  sealSubtitle: { fontSize: 13, color: '#6B6B6B', textAlign: 'center', marginTop: 12, lineHeight: 22, paddingHorizontal: 8 },
 
-  intentionInputContainer: { width: '100%', marginTop: 32 },
-  inputLabel: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', letterSpacing: 2, marginBottom: 8 },
-  intentionInput: {
-    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#D4AF3740',
-    borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 16, color: '#E0E0E0', textAlign: 'center',
-  },
-
-  intentionSuggestions: {
+  // Multi-select intention grid
+  intentionGrid: {
     flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center',
-    gap: 8, marginTop: 16,
+    gap: 10, marginTop: 24, width: '100%',
   },
-  suggestionChip: {
-    borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 16,
-    paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#080808',
+  intentionCard: {
+    width: (SW - 78) / 2, backgroundColor: '#0D0D0D',
+    borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 14,
+    paddingVertical: 16, paddingHorizontal: 12, alignItems: 'center', gap: 6,
   },
-  suggestionChipActive: { borderColor: '#D4AF3760', backgroundColor: '#D4AF3715' },
-  suggestionText: { fontSize: 12, color: '#6B6B6B' },
-  suggestionTextActive: { color: '#D4AF37' },
+  intentionCardActive: {
+    borderColor: '#D4AF3780', backgroundColor: '#D4AF3712',
+  },
+  intentionIcon: { fontSize: 24 },
+  intentionLabel: { fontSize: 13, color: '#C0C0C0', fontWeight: '600' },
+  intentionLabelActive: { color: '#D4AF37' },
+  checkMark: {
+    position: 'absolute', top: 6, right: 8,
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: '#D4AF37', justifyContent: 'center', alignItems: 'center',
+  },
+  checkMarkText: { fontSize: 12, color: '#050505', fontWeight: '700' },
 
+  // Birth data form
+  formGroup: { width: '100%', marginTop: 16 },
+  inputLabel: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', letterSpacing: 2, marginBottom: 6 },
+  formInput: {
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#333',
+    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 15, color: '#E0E0E0',
+  },
+  placeRow: { flexDirection: 'row', gap: 8 },
+  geocodeBtn: {
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#333',
+    borderRadius: 10, width: 48, justifyContent: 'center', alignItems: 'center',
+  },
+  geocodeBtnText: { fontSize: 20 },
+  coordsText: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#D4AF37', marginTop: 6 },
+
+  // Forge button
   forgeBtn: {
     backgroundColor: '#D4AF37', borderRadius: 24, paddingVertical: 14,
-    paddingHorizontal: 40, marginTop: 32,
+    paddingHorizontal: 40, marginTop: 28, width: '100%', alignItems: 'center',
   },
-  forgeBtnDisabled: { backgroundColor: '#1A1A1A' },
   forgeBtnText: { color: '#050505', fontSize: 15, fontWeight: '700', letterSpacing: 1 },
+
+  // Skip rune creation
+  skipRuneBtn: { marginTop: 16, paddingVertical: 8 },
+  skipRuneBtnText: { fontSize: 13, color: '#6B6B6B', textDecorationLine: 'underline' },
 
   // Generating phase
   generatingSymbol: { fontSize: 64, color: '#D4AF37' },
@@ -444,7 +642,6 @@ const styles = StyleSheet.create({
   runeOverlay: {
     width: RUNE_SIZE, height: RUNE_SIZE * 1.4,
     justifyContent: 'center', alignItems: 'center',
-    marginTop: 0,
   },
 
   runeNameRow: { flexDirection: 'row', gap: 12, marginTop: 20 },

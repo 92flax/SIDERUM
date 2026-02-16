@@ -19,11 +19,13 @@ export interface SensorSubscriptions {
 }
 
 // Calculate compass heading from magnetometer data
+// Standard formula: atan2 of magnetometer X/Y gives angle from magnetic north
+// On mobile devices held upright: +X points right, +Y points up, +Z points out of screen
 export function calculateHeading(magX: number, magY: number): number {
-  let heading = Math.atan2(magY, magX) * (180 / Math.PI);
+  // atan2(-magX, magY) gives angle from magnetic north (Y-axis) clockwise
+  let heading = Math.atan2(-magX, magY) * (180 / Math.PI);
+  // Normalize to 0-360
   heading = ((heading % 360) + 360) % 360;
-  // Convert from math angle to compass bearing
-  heading = (360 - heading + 90) % 360;
   return heading;
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { Text, View, StyleSheet, FlatList, Platform, Pressable, ScrollView, Dimensions } from 'react-native';
+import { Text, View, StyleSheet, FlatList, Platform, Pressable, ScrollView, Dimensions, Alert } from 'react-native';
 import { Magnetometer, Accelerometer } from 'expo-sensors';
 import * as Haptics from 'expo-haptics';
 import { ScreenContainer } from '@/components/screen-container';
@@ -353,7 +353,8 @@ export default function SanctumScreen() {
 
   const actionColor = actionTypeColors[currentStep?.action_type ?? 'MOVEMENT'] ?? '#6B6B6B';
 
-  const canAdvance = !(
+  // Non-blocking navigation: buttons are never disabled, but show visual warning
+  const isStepIncomplete = (
     (playerState === 'compass_lock' && !isDirectionLocked) ||
     (playerState === 'tracing' && !isTracingDetected)
   );
@@ -464,7 +465,6 @@ export default function SanctumScreen() {
         <View style={styles.navRow}>
           <Pressable
             onPress={handlePrevStep}
-            disabled={currentStepIndex === 0}
             style={({ pressed }) => [
               styles.navBtn,
               currentStepIndex === 0 && styles.navBtnDisabled,
@@ -477,12 +477,21 @@ export default function SanctumScreen() {
           </Pressable>
 
           <Pressable
-            onPress={handleNextStep}
-            disabled={!canAdvance}
+            onPress={() => {
+              if (isStepIncomplete) {
+                if (Platform.OS !== ('web' as string)) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                Alert.alert('Step Incomplete', 'You may proceed, but the current step is not fully completed.', [
+                  { text: 'Stay', style: 'cancel' },
+                  { text: 'Proceed Anyway', onPress: handleNextStep },
+                ]);
+              } else {
+                handleNextStep();
+              }
+            }}
             style={({ pressed }) => [
               styles.navBtn,
               styles.navBtnNext,
-              !canAdvance && styles.navBtnDisabled,
+              isStepIncomplete && { opacity: 0.6 },
               pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
             ]}
           >
@@ -570,13 +579,12 @@ const styles = StyleSheet.create({
   },
   filterRow: { flexDirection: 'row', marginBottom: 4 },
   filterChip: {
-    borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 16,
-    paddingHorizontal: 12, paddingVertical: 6, marginRight: 6,
-    backgroundColor: '#080808',
+    borderWidth: 1, borderColor: '#333333', borderRadius: 16,
+    paddingHorizontal: 12, paddingVertical: 6, marginRight: 6, backgroundColor: '#0D0D0D',
   },
   filterChipActive: { borderColor: '#D4AF3760', backgroundColor: '#D4AF3715' },
-  filterChipText: { fontSize: 11, color: '#6B6B6B' },
-  filterChipTextActive: { color: '#D4AF37' },
+  filterChipText: { fontSize: 11, color: '#C0C0C0', fontWeight: '500' },
+  filterChipTextActive: { color: '#D4AF37', fontWeight: '700' },
 
   // Player styles
   playerContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },

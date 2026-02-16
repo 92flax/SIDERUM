@@ -211,3 +211,28 @@
 - [x] Highlight/pin current planetary hour ritual (e.g., Mars Hour → Mars Ritual)
 - [x] Deep Dive Overlay: Current Influence, Recommended Color, Countdown timer
 - [x] GPS integration for location-aware calculations
+
+## Fix & Feature Update
+
+### PART 1: Critical Bug Fixes
+- [x] Compass: Fix inverted azimuth (180-degree error)
+- [x] Compass: Fix AR horizon pitch/roll mapping (horizon at eye level)
+- [x] Home: DELETE QuickActionsContainer entirely
+- [x] Home: Restore PlanetaryChart tile alongside Wallet (2x2 grid or horizontal scroll)
+- [x] Sanctum: Fix Intentions/Traditions text visibility (white-on-white contrast issue)
+
+### PART 2: Extended Onboarding
+- [x] Change Intention Input from single-select to multi-select (checkboxes/tags)
+- [x] Add visible "Skip Rune Creation" button in header
+- [x] Add Birth Data Input step (Date of Birth, Time of Birth, Place of Birth)
+- [x] Store UserNatalData in AsyncStorage
+
+### PART 3: Magical Power Rating
+- [x] Calculate transit-based score using UserNatalData (0-100%)
+- [x] Add Active Rune power modifier to score
+- [x] Display "Astral Potency" gauge on Home Screen
+
+### PART 4: Interactivity Updates
+- [x] Chart: Make every planet name/icon clickable with detail modal (already implemented)
+- [x] Dashboard: Add onClick tooltips for Path of Fortune, Path of Spirit, Aspects
+- [x] Non-blocking navigation: Never disable Next buttons, show warning toast instead
