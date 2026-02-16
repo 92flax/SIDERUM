@@ -22,7 +22,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
 import { useProStore } from "@/lib/store/pro-store";
-import { OnboardingScreen } from "@/components/onboarding";
+import { useRuneWalletStore } from "@/lib/store/rune-wallet";
+import { AdeptsSeal } from "@/components/adepts-seal";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -40,7 +41,7 @@ export default function RootLayout() {
 
   const [insets, setInsets] = useState<EdgeInsets>(initialInsets);
   const [frame, setFrame] = useState<Rect>(initialFrame);
-  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
+  const [showSeal, setShowSeal] = useState<boolean | null>(null);
 
   // Load custom fonts
   const [fontsLoaded, fontError] = useFonts({
@@ -48,26 +49,22 @@ export default function RootLayout() {
     JetBrainsMono: "https://fonts.gstatic.com/s/jetbrainsmono/v18/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxTOlOV.ttf",
   });
 
-  // Check onboarding status
+  // Check seal/onboarding status
   useEffect(() => {
-    const checkOnboarding = async () => {
+    const checkSeal = async () => {
       try {
-        const value = await AsyncStorage.getItem(ONBOARDING_KEY);
-        setShowOnboarding(value !== 'true');
+        await useRuneWalletStore.getState().loadWallet();
+        const { hasCompletedSeal } = useRuneWalletStore.getState();
+        setShowSeal(!hasCompletedSeal);
       } catch {
-        setShowOnboarding(true);
+        setShowSeal(true);
       }
     };
-    checkOnboarding();
+    checkSeal();
   }, []);
 
-  const handleOnboardingComplete = useCallback(async () => {
-    try {
-      await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-    } catch {
-      // Silently fail
-    }
-    setShowOnboarding(false);
+  const handleSealComplete = useCallback(async () => {
+    setShowSeal(false);
   }, []);
 
   // Initialize Manus runtime for cookie injection from parent container
@@ -75,16 +72,16 @@ export default function RootLayout() {
     initManusRuntime();
   }, []);
 
-  // Load subscription state
+  // Load subscription state and wallet
   useEffect(() => {
     useProStore.getState().loadSubscription();
   }, []);
 
   useEffect(() => {
-    if ((fontsLoaded || fontError) && showOnboarding !== null) {
+    if ((fontsLoaded || fontError) && showSeal !== null) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError, showOnboarding]);
+  }, [fontsLoaded, fontError, showSeal]);
 
   const handleSafeAreaUpdate = useCallback((metrics: Metrics) => {
     setInsets(metrics.insets);
@@ -128,13 +125,13 @@ export default function RootLayout() {
     return null;
   }
 
-  if (showOnboarding === null) {
+  if (showSeal === null) {
     return null;
   }
 
-  // Onboarding wraps the entire app
-  const mainContent = showOnboarding ? (
-    <OnboardingScreen onComplete={handleOnboardingComplete} />
+  // Adept's Seal onboarding wraps the entire app
+  const mainContent = showSeal ? (
+    <AdeptsSeal onComplete={handleSealComplete} />
   ) : (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>

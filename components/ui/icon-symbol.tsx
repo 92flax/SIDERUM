@@ -21,6 +21,7 @@ const MAPPING = {
   "book.fill": "menu-book",
   "pencil.and.outline": "edit",
   "gearshape.fill": "settings",
+  "wallet.pass.fill": "account-balance-wallet",
 } as IconMapping;
 
 /**

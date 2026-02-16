@@ -9,6 +9,7 @@ import { calculateHeading, isAlignedToDirection, detectTracingMotion } from '@/l
 import { Ritual, RitualStep, RitualIntention, RitualTradition } from '@/lib/ritual/types';
 import { useAstroStore } from '@/lib/astro/store';
 import { ELDER_FUTHARK, generateBindruneData } from '@/lib/runes/futhark';
+import { useRuneWalletStore } from '@/lib/store/rune-wallet';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -116,15 +117,26 @@ export default function SanctumScreen() {
   // Determine if current ritual is LBRP
   const isLBRP = currentRitual?.id === 'lbrp' || currentRitual?.name?.toLowerCase().includes('lesser banishing');
 
-  // AR Sigil Anchor: Generate a default bindrune from the first 3 runes (protection-themed)
+  // Rune Wallet: Use active talisman as sigil, or fallback to protection runes
+  const activeRune = useRuneWalletStore((s) => s.getActiveRune());
+
   const sigilData = useMemo(() => {
-    // Use protection-themed runes as default sigil for rituals
+    // If active talisman exists, use its runes
+    if (activeRune) {
+      const runeObjs = activeRune.runeNames
+        .map(n => ELDER_FUTHARK.find(r => r.name === n))
+        .filter(Boolean);
+      if (runeObjs.length > 0) {
+        return generateBindruneData(runeObjs as any, 200, 300);
+      }
+    }
+    // Fallback: protection-themed runes
     const protectionRunes = ELDER_FUTHARK.filter(r =>
       r.keywords.some(k => ['protection', 'strength', 'power'].includes(k))
     ).slice(0, 3);
     if (protectionRunes.length === 0) return null;
     return generateBindruneData(protectionRunes, 200, 300);
-  }, []);
+  }, [activeRune]);
 
   // ==========================================
   // Ritual Selection Screen with Intent Toggle
@@ -424,7 +436,14 @@ export default function SanctumScreen() {
           {/* ===== BOTTOM SECTION: Holo-Pad (60%) ===== */}
           {showHoloPad && shapeData && (
             <View style={styles.holoPadSection}>
-              <Text style={styles.holoPadLabel}>Holo-Pad</Text>
+              <View style={styles.holoPadHeader}>
+                <Text style={styles.holoPadLabel}>Holo-Pad</Text>
+                {activeRune && (
+                  <View style={styles.activeTalismanBadge}>
+                    <Text style={styles.activeTalismanText}>⟡ {activeRune.name}</Text>
+                  </View>
+                )}
+              </View>
               <HoloPad
                 shape={shapeData.shape}
                 colorHex={shapeData.color_hex}
@@ -629,4 +648,12 @@ const styles = StyleSheet.create({
   completedName: { fontSize: 15, color: '#E0E0E0', marginTop: 8, textAlign: 'center' },
   completedIntent: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', marginTop: 4 },
   completedText: { fontSize: 13, color: '#6B6B6B', marginTop: 8, textAlign: 'center' },
+
+  // Active Talisman
+  holoPadHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  activeTalismanBadge: {
+    backgroundColor: '#D4AF3720', borderWidth: 1, borderColor: '#D4AF3740',
+    borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3,
+  },
+  activeTalismanText: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#D4AF37', letterSpacing: 1 },
 });

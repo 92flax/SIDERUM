@@ -184,3 +184,30 @@
 - [x] Talisman Wallet: Link Bindrunes to planetary dignity scores, Golden Aura glow for high scores (+5)
 - [x] Ritual Catalog filters: Intention (Protection, Wealth, Healing, Wisdom, Power, Purification) and Tradition (Golden Dawn, Thelema, Norse, Hermetic)
 - [x] Added 4 new rituals: Middle Pillar, SIRP, Star Ruby, Hammer Rite
+
+## Adept's Seal, Rune Wallet & Real-Time Engine
+
+### Task 1: Adept's Seal Onboarding
+- [x] Intention Input screen on first launch (Protection, Wealth, Wisdom, Power, Healing)
+- [x] Procedural Master Rune generation based on intention (unique SVG)
+- [x] "Infuse" tap-and-hold animation with progress ring and haptic feedback
+- [x] Auto-save Master Rune to Rune Wallet as default active talisman
+- [x] Replace current onboarding with Adept's Seal flow
+
+### Task 2: Rune Wallet (Inventory)
+- [x] RuneWalletView with grid layout showing all saved bindrunes
+- [x] Single-selection toggle: selected rune = global Active Talisman
+- [x] AsyncStorage persistence for wallet and active selection
+- [x] Zustand store for global wallet state accessible from all screens
+
+### Task 3: Ritual Mode (Dynamic UI)
+- [x] Pentagram positioned in bottom-third with high-fidelity glow
+- [x] IF Active Rune exists: render glowing in pentagram center
+- [x] IF No Rune: render empty center with subtle placeholder
+
+### Task 4: Real-Time Event Engine
+- [x] Live ephemeris calculations: Moon Phase %, Planetary Hour, Sun/Moon Sign
+- [x] Dynamic event list auto-refreshing based on current time and location
+- [x] Highlight/pin current planetary hour ritual (e.g., Mars Hour → Mars Ritual)
+- [x] Deep Dive Overlay: Current Influence, Recommended Color, Countdown timer
+- [x] GPS integration for location-aware calculations

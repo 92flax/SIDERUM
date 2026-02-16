@@ -21,7 +21,7 @@ interface DayRuler {
   metal: string;
 }
 
-const DAY_RULERS: Record<number, DayRuler> = {
+export const DAY_RULERS: Record<number, DayRuler> = {
   0: { // Sunday
     planet: 'Sun',
     dayName: 'Sunday',
@@ -123,4 +123,4 @@ export function getRulerRecommendation(date: Date = new Date()): {
   };
 }
 
-export { DayRuler };
+export type { DayRuler };

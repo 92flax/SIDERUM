@@ -39,13 +39,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="chart"
-        options={{
-          title: "Chart",
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="star.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="compass"
         options={{
           title: "Compass",
@@ -62,10 +55,20 @@ export default function TabLayout() {
       <Tabs.Screen
         name="runes"
         options={{
-          title: "Runes",
+          title: "Forge",
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="pencil.and.outline" color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="wallet"
+        options={{
+          title: "Wallet",
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="wallet.pass.fill" color={color} />,
+        }}
+      />
+      {/* Hidden tabs - accessible via navigation but not in tab bar */}
+      <Tabs.Screen name="chart" options={{ href: null }} />
+      <Tabs.Screen name="settings" options={{ href: null }} />
     </Tabs>
   );
 }

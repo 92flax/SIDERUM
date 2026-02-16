@@ -6,6 +6,7 @@ import { ScreenContainer } from '@/components/screen-container';
 import { ELDER_FUTHARK, Rune, findRunesByKeyword, generateBindruneData } from '@/lib/runes/futhark';
 import { useAstroStore } from '@/lib/astro/store';
 import { PLANET_SYMBOLS } from '@/lib/astro/types';
+import { useRuneWalletStore } from '@/lib/store/rune-wallet';
 
 // Neon glow color options
 const GLOW_GOLD = '#FFD700';
@@ -21,6 +22,8 @@ export default function RunicForgeScreen() {
   const [selectedRunes, setSelectedRunes] = useState<Rune[]>([]);
   const [glowColor, setGlowColor] = useState(GLOW_GOLD);
   const chartData = useAstroStore((s) => s.chartData);
+  const saveRune = useRuneWalletStore((s) => s.saveRune);
+  const savedRunes = useRuneWalletStore((s) => s.savedRunes);
 
   const addKeyword = useCallback(() => {
     const trimmed = inputText.trim().toLowerCase();
@@ -120,6 +123,24 @@ export default function RunicForgeScreen() {
       })
       .filter(w => w.issues.length > 0);
   }, [selectedRunes, chartData]);
+
+  const handleSaveToWallet = useCallback(() => {
+    if (selectedRunes.length === 0) return;
+    if (Platform.OS !== ('web' as string)) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    const name = selectedRunes.map(r => r.name).join(' + ');
+    saveRune({
+      name,
+      runeNames: selectedRunes.map(r => r.name),
+      keywords: selectedRunes.flatMap(r => r.keywords).slice(0, 6),
+      isMasterRune: false,
+      dignityScore: talismapowerScore,
+    });
+    if (Platform.OS !== ('web' as string)) {
+      Alert.alert('Saved', `"${name}" has been added to your Rune Wallet.`);
+    }
+  }, [selectedRunes, talismapowerScore]);
 
   const toggleGlowColor = useCallback(() => {
     if (Platform.OS !== ('web' as string)) {
@@ -411,6 +432,16 @@ export default function RunicForgeScreen() {
                 })}
               </View>
             )}
+            {/* Save to Wallet Button */}
+            <Pressable
+              onPress={handleSaveToWallet}
+              style={({ pressed }) => [
+                styles.saveWalletBtn,
+                pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
+              ]}
+            >
+              <Text style={styles.saveWalletBtnText}>Save to Wallet</Text>
+            </Pressable>
           </View>
         ) : (
           <View style={styles.emptyState}>
@@ -542,4 +573,11 @@ const styles = StyleSheet.create({
   talismapowerRuneSymbol: { fontSize: 18, color: '#D4AF37', width: 28, textAlign: 'center' },
   talismapowerRuneName: { fontSize: 12, color: '#E0E0E0', flex: 1 },
   talismapowerRuneScore: { fontFamily: 'JetBrainsMono', fontSize: 13, fontWeight: '700' },
+
+  // Save to Wallet
+  saveWalletBtn: {
+    backgroundColor: '#D4AF37', borderRadius: 20, paddingVertical: 12,
+    paddingHorizontal: 32, marginTop: 16, alignSelf: 'center',
+  },
+  saveWalletBtnText: { color: '#050505', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
 });
