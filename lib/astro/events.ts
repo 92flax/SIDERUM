@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Event Horizon Engine
+// ÆONIS – Event Horizon Engine
 // Calculates upcoming astronomical events for 5 years
 // Types: Eclipses, Planetary Stations, Great Conjunctions
 // ============================================================

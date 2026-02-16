@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Essential Dignities (Ptolemaic System)
+// ÆONIS – Essential Dignities (Ptolemaic System)
 // ============================================================
 
 import { Planet, ZodiacSign, EssentialDignity, Sect } from './types';

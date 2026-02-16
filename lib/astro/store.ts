@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Global Astro State (Zustand)
+// ÆONIS – Global Astro State (Zustand)
 // ============================================================
 
 import { create } from 'zustand';

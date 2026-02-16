@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Geocoding Utility
+// ÆONIS – Geocoding Utility
 // Uses Nominatim (OpenStreetMap) for free geocoding
 // ============================================================
 
@@ -20,7 +20,7 @@ export async function searchLocation(query: string): Promise<GeocodingResult[]> 
     const url = `${NOMINATIM_BASE}/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`;
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'SIDERUM-App/1.0',
+        'User-Agent': 'AEONIS-App/1.0',
         'Accept-Language': 'en',
       },
     });
@@ -45,7 +45,7 @@ export async function reverseGeocode(lat: number, lon: number): Promise<string> 
     const url = `${NOMINATIM_BASE}/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`;
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'SIDERUM-App/1.0',
+        'User-Agent': 'AEONIS-App/1.0',
         'Accept-Language': 'en',
       },
     });

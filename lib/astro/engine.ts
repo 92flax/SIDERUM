@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Astrological Calculation Engine
+// ÆONIS – Astrological Calculation Engine
 // Uses astronomy-engine for high-precision planetary positions
 // ============================================================
 

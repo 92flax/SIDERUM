@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Ruler of the Day (Chaldean Order)
+// ÆONIS – Ruler of the Day (Chaldean Order)
 // Calculates the planetary ruler for any given day
 // and suggests matching rituals
 // ============================================================

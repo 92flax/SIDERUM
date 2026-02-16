@@ -1,4 +1,4 @@
-# SIDERUM Project TODO
+# ÆONIS Project TODO
 
 ## Setup & Branding
 - [x] Configure Cyber-Grimoire theme (colors, typography)
@@ -87,7 +87,7 @@
 - [x] Success state: shape turns solid gold and pulses
 - [x] Eliminate Next button between reading and drawing steps
 
-### Module 4: Monetization – SIDERUM PRO
+### Module 4: Monetization – ÆONIS PRO
 - [x] Create subscription store (Pro tier state management)
 - [x] Neophyte (Free): Basic Dashboard, Standard Chart, Basic Rituals (LBRP)
 - [x] Adeptus (Pro): Event Horizon, Advanced Rituals, Unlimited Bindrunes, Aspectarian
@@ -168,3 +168,19 @@
 - [x] 3-Slide Onboarding: "Celestial Intelligence"
 - [x] 3-Slide Onboarding: "Ritual Compass" (sensor-fused navigation)
 - [x] 3-Slide Onboarding: "Runic Forge" (bindrune generator)
+
+## Project ÆONIS – Rebranding & Architecture
+
+### 1. Global Rebranding
+- [x] Replace all "Siderum" / "SIDERUM" with "ÆONIS" across all files
+- [x] Update app.config.ts appName to "ÆONIS"
+- [x] Update Paywall tier name to "ÆONIS Adeptus"
+- [x] Update Onboarding slides: Welcome to ÆONIS, AR Calibration, Set Intent
+
+### 2. Ritual Engine V3
+- [x] AR Sigil Anchor: Project selected Bindrune SVG pulsing in center of traced pentagram shape
+
+### 3. Runic Resonance & Library
+- [x] Talisman Wallet: Link Bindrunes to planetary dignity scores, Golden Aura glow for high scores (+5)
+- [x] Ritual Catalog filters: Intention (Protection, Wealth, Healing, Wisdom, Power, Purification) and Tradition (Golden Dawn, Thelema, Norse, Hermetic)
+- [x] Added 4 new rituals: Middle Pillar, SIRP, Star Ruby, Hammer Rite

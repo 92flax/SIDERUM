@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Text, View, StyleSheet, FlatList, Platform, Pressable, ScrollView, Dimensions } from 'react-native';
 import { Magnetometer, Accelerometer } from 'expo-sensors';
 import * as Haptics from 'expo-haptics';
@@ -6,7 +6,9 @@ import { ScreenContainer } from '@/components/screen-container';
 import { HoloPad } from '@/components/holo-pad';
 import { useRitualStore } from '@/lib/ritual/store';
 import { calculateHeading, isAlignedToDirection, detectTracingMotion } from '@/lib/compass/sensor-fusion';
-import { Ritual, RitualStep } from '@/lib/ritual/types';
+import { Ritual, RitualStep, RitualIntention, RitualTradition } from '@/lib/ritual/types';
+import { useAstroStore } from '@/lib/astro/store';
+import { ELDER_FUTHARK, generateBindruneData } from '@/lib/runes/futhark';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -30,6 +32,22 @@ export default function SanctumScreen() {
   const [heading, setHeading] = useState(0);
   const accHistoryRef = useRef<Array<{ x: number; y: number; z: number; timestamp: number }>>([]);
   const alignedRef = useRef(false);
+
+  // Catalog filters
+  const [filterIntention, setFilterIntention] = useState<RitualIntention | 'All'>('All');
+  const [filterTradition, setFilterTradition] = useState<RitualTradition | 'All'>('All');
+  const chartData = useAstroStore((s) => s.chartData);
+
+  const filteredRituals = useMemo(() => {
+    return rituals.filter(r => {
+      if (filterIntention !== 'All' && (r as any).intention !== filterIntention) return false;
+      if (filterTradition !== 'All' && (r as any).traditionTag !== filterTradition) return false;
+      return true;
+    });
+  }, [rituals, filterIntention, filterTradition]);
+
+  const INTENTIONS: Array<RitualIntention | 'All'> = ['All', 'Protection', 'Wealth', 'Healing', 'Wisdom', 'Power', 'Purification'];
+  const TRADITIONS: Array<RitualTradition | 'All'> = ['All', 'Golden Dawn', 'Thelema', 'Norse', 'Hermetic'];
 
   useEffect(() => { loadRituals(); }, []);
 
@@ -97,6 +115,16 @@ export default function SanctumScreen() {
 
   // Determine if current ritual is LBRP
   const isLBRP = currentRitual?.id === 'lbrp' || currentRitual?.name?.toLowerCase().includes('lesser banishing');
+
+  // AR Sigil Anchor: Generate a default bindrune from the first 3 runes (protection-themed)
+  const sigilData = useMemo(() => {
+    // Use protection-themed runes as default sigil for rituals
+    const protectionRunes = ELDER_FUTHARK.filter(r =>
+      r.keywords.some(k => ['protection', 'strength', 'power'].includes(k))
+    ).slice(0, 3);
+    if (protectionRunes.length === 0) return null;
+    return generateBindruneData(protectionRunes, 200, 300);
+  }, []);
 
   // ==========================================
   // Ritual Selection Screen with Intent Toggle
@@ -176,25 +204,80 @@ export default function SanctumScreen() {
             </View>
           )}
 
-          <Text style={styles.sectionTitle}>Available Rituals</Text>
-          <FlatList
-            data={rituals}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
+          {/* ===== CATALOG FILTERS ===== */}
+          <Text style={styles.sectionTitle}>Catalog</Text>
+
+          {/* Intention Filter */}
+          <Text style={styles.filterLabel}>INTENTION</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
+            {INTENTIONS.map((i) => (
               <Pressable
+                key={i}
                 onPress={() => {
                   if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  selectRitual(item.id);
+                  setFilterIntention(i);
                 }}
-                style={({ pressed }) => [styles.ritualCard, pressed && { opacity: 0.7 }]}
+                style={({ pressed }) => [
+                  styles.filterChip,
+                  filterIntention === i && styles.filterChipActive,
+                  pressed && { opacity: 0.7 },
+                ]}
               >
-                <Text style={styles.ritualCardName}>{item.name}</Text>
-                <Text style={styles.ritualCardDesc}>{item.description}</Text>
-                <Text style={styles.ritualCardMeta}>
-                  {item.tradition} · {item.steps.length} steps
-                </Text>
+                <Text style={[styles.filterChipText, filterIntention === i && styles.filterChipTextActive]}>{i}</Text>
               </Pressable>
-            )}
+            ))}
+          </ScrollView>
+
+          {/* Tradition Filter */}
+          <Text style={styles.filterLabel}>TRADITION</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
+            {TRADITIONS.map((t) => (
+              <Pressable
+                key={t}
+                onPress={() => {
+                  if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setFilterTradition(t);
+                }}
+                style={({ pressed }) => [
+                  styles.filterChip,
+                  filterTradition === t && styles.filterChipActive,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Text style={[styles.filterChipText, filterTradition === t && styles.filterChipTextActive]}>{t}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          <Text style={styles.sectionTitle}>Available Rituals ({filteredRituals.length})</Text>
+          <FlatList
+            data={filteredRituals}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => {
+              const intention = (item as any).intention || 'General';
+              const tradition = (item as any).traditionTag || item.tradition;
+              return (
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    selectRitual(item.id);
+                  }}
+                  style={({ pressed }) => [styles.ritualCard, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={styles.ritualCardName}>{item.name}</Text>
+                  <Text style={styles.ritualCardDesc}>{item.description}</Text>
+                  <View style={styles.ritualTagRow}>
+                    <View style={styles.ritualTag}>
+                      <Text style={styles.ritualTagText}>{intention}</Text>
+                    </View>
+                    <View style={[styles.ritualTag, styles.ritualTagTradition]}>
+                      <Text style={styles.ritualTagText}>{tradition}</Text>
+                    </View>
+                    <Text style={styles.ritualCardMeta}>{item.steps.length} steps</Text>
+                  </View>
+                </Pressable>
+              );
+            }}
             contentContainerStyle={styles.ritualList}
           />
         </View>
@@ -349,6 +432,10 @@ export default function SanctumScreen() {
                 onSimulateTrace={isTracingStep ? () => setTracingDetected(true) : undefined}
                 intent={intent}
                 isLBRP={isLBRP}
+                sigilLines={sigilData?.lines}
+                sigilPaths={sigilData?.paths}
+                sigilWidth={sigilData?.width}
+                sigilHeight={sigilData?.height}
               />
             </View>
           )}
@@ -448,7 +535,29 @@ const styles = StyleSheet.create({
   },
   ritualCardName: { fontSize: 15, fontWeight: '600', color: '#E0E0E0' },
   ritualCardDesc: { fontSize: 12, color: '#6B6B6B', marginTop: 4, lineHeight: 18 },
-  ritualCardMeta: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', marginTop: 6 },
+  ritualCardMeta: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B' },
+  ritualTagRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  ritualTag: {
+    backgroundColor: '#D4AF3715', borderWidth: 1, borderColor: '#D4AF3730',
+    borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2,
+  },
+  ritualTagTradition: { backgroundColor: '#00FFFF10', borderColor: '#00FFFF30' },
+  ritualTagText: { fontFamily: 'JetBrainsMono', fontSize: 9, color: '#D4AF37', letterSpacing: 0.5 },
+
+  // Catalog Filters
+  filterLabel: {
+    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B',
+    letterSpacing: 2, marginTop: 12, marginBottom: 4,
+  },
+  filterRow: { flexDirection: 'row', marginBottom: 4 },
+  filterChip: {
+    borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 16,
+    paddingHorizontal: 12, paddingVertical: 6, marginRight: 6,
+    backgroundColor: '#080808',
+  },
+  filterChipActive: { borderColor: '#D4AF3760', backgroundColor: '#D4AF3715' },
+  filterChipText: { fontSize: 11, color: '#6B6B6B' },
+  filterChipTextActive: { color: '#D4AF37' },
 
   // Player styles
   playerContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },

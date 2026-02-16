@@ -26,7 +26,7 @@ import { OnboardingScreen } from "@/components/onboarding";
 
 SplashScreen.preventAutoHideAsync();
 
-const ONBOARDING_KEY = '@siderum_onboarding_complete';
+const ONBOARDING_KEY = '@aeonis_onboarding_complete';
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 

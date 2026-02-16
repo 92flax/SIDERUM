@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Pro Subscription Store
+// ÆONIS – Pro Subscription Store
 // Manages Neophyte (Free) vs Adeptus (Pro) tier gating
 // In production, this would integrate with RevenueCat
 // ============================================================
@@ -41,7 +41,7 @@ interface ProState {
   canGenerateBindrune: () => boolean;
 }
 
-const STORAGE_KEY = '@siderum_subscription';
+const STORAGE_KEY = '@aeonis_subscription';
 
 export const useProStore = create<ProState>((set, get) => ({
   tier: 'neophyte',

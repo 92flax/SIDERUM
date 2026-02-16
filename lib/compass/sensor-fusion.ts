@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Sensor Fusion for Ritual Compass
+// ÆONIS – Sensor Fusion for Ritual Compass
 // ============================================================
 
 import { Platform } from 'react-native';

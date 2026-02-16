@@ -8,7 +8,7 @@ const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
 
 const env = {
-  appName: "SIDERUM",
+  appName: "ÆONIS",
   appSlug: "siderum",
   logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/106428115/sOaPQKOyNVKCZFVg.png",
   scheme: schemeFromBundleId,

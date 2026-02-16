@@ -222,7 +222,7 @@ export default function SettingsScreen() {
         {/* About Section */}
         <Text style={styles.sectionTitle}>About</Text>
         <View style={styles.card}>
-          <Text style={styles.aboutTitle}>SIDERUM</Text>
+          <Text style={styles.aboutTitle}>ÆONIS</Text>
           <Text style={styles.aboutText}>
             Professional-grade application for classical astrologers and ceremonial magicians.
           </Text>
@@ -249,7 +249,7 @@ export default function SettingsScreen() {
         <Text style={styles.sectionTitle}>Legal</Text>
         <View style={styles.card}>
           <Pressable
-            onPress={() => Linking.openURL('https://siderum.app/privacy')}
+            onPress={() => Linking.openURL('https://aeonis.app/privacy')}
             style={({ pressed }) => [styles.legalRow, pressed && { opacity: 0.7 }]}
           >
             <Text style={styles.legalIcon}>🔒</Text>
@@ -258,7 +258,7 @@ export default function SettingsScreen() {
           </Pressable>
           <View style={styles.legalDivider} />
           <Pressable
-            onPress={() => Linking.openURL('https://siderum.app/terms')}
+            onPress={() => Linking.openURL('https://aeonis.app/terms')}
             style={({ pressed }) => [styles.legalRow, pressed && { opacity: 0.7 }]}
           >
             <Text style={styles.legalIcon}>📄</Text>

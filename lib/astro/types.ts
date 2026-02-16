@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Astrological Core Types
+// ÆONIS – Astrological Core Types
 // ============================================================
 
 export type ZodiacSign =

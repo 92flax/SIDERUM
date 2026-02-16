@@ -4,51 +4,38 @@
     "name": "Lesser Banishing Ritual of the Pentagram",
     "description": "The foundational banishing ritual of the Western Magical Tradition. Used to purify and protect the ritual space.",
     "tradition": "Golden Dawn",
+    "intention": "Protection",
+    "traditionTag": "Golden Dawn",
     "steps": [
       {
         "order": 1,
         "action_type": "GESTURE",
         "instruction_text": "Stand in the center of your space. Take a moment to center yourself. Touch your forehead.",
-        "audio_vibration": {
-          "word": "Ateh",
-          "phonetic": "Ah-teh"
-        }
+        "audio_vibration": { "word": "Ateh", "phonetic": "Ah-teh" }
       },
       {
         "order": 2,
         "action_type": "GESTURE",
         "instruction_text": "Touch your chest, pointing downward toward your feet.",
-        "audio_vibration": {
-          "word": "Malkuth",
-          "phonetic": "Mal-kooth"
-        }
+        "audio_vibration": { "word": "Malkuth", "phonetic": "Mal-kooth" }
       },
       {
         "order": 3,
         "action_type": "GESTURE",
         "instruction_text": "Touch your right shoulder.",
-        "audio_vibration": {
-          "word": "Ve-Geburah",
-          "phonetic": "Veh-Geh-boo-rah"
-        }
+        "audio_vibration": { "word": "Ve-Geburah", "phonetic": "Veh-Geh-boo-rah" }
       },
       {
         "order": 4,
         "action_type": "GESTURE",
         "instruction_text": "Touch your left shoulder.",
-        "audio_vibration": {
-          "word": "Ve-Gedulah",
-          "phonetic": "Veh-Geh-doo-lah"
-        }
+        "audio_vibration": { "word": "Ve-Gedulah", "phonetic": "Veh-Geh-doo-lah" }
       },
       {
         "order": 5,
         "action_type": "GESTURE",
         "instruction_text": "Clasp your hands upon your breast.",
-        "audio_vibration": {
-          "word": "Le-Olam, Amen",
-          "phonetic": "Leh-Oh-lahm, Ah-men"
-        }
+        "audio_vibration": { "word": "Le-Olam, Amen", "phonetic": "Leh-Oh-lahm, Ah-men" }
       },
       {
         "order": 6,
@@ -61,21 +48,14 @@
         "action_type": "TRACE",
         "instruction_text": "Trace a banishing Earth pentagram before you in the air. Start from the lower-left hip, trace up to above the head, down to the right hip, up to the left shoulder, across to the right shoulder, and back to the lower-left hip.",
         "compass_direction": "EAST",
-        "ar_element": {
-          "shape": "Pentagram",
-          "color_hex": "#3B82F6",
-          "position": "EAST"
-        }
+        "ar_element": { "shape": "Pentagram", "color_hex": "#3B82F6", "position": "EAST" }
       },
       {
         "order": 8,
         "action_type": "VIBRATION",
         "instruction_text": "Point to the center of the pentagram and vibrate the Divine Name.",
         "compass_direction": "EAST",
-        "audio_vibration": {
-          "word": "YHVH",
-          "phonetic": "Yod-Heh-Vav-Heh"
-        }
+        "audio_vibration": { "word": "YHVH", "phonetic": "Yod-Heh-Vav-Heh" }
       },
       {
         "order": 9,
@@ -88,21 +68,14 @@
         "action_type": "TRACE",
         "instruction_text": "Trace a banishing Earth pentagram before you in the air.",
         "compass_direction": "SOUTH",
-        "ar_element": {
-          "shape": "Pentagram",
-          "color_hex": "#EF4444",
-          "position": "SOUTH"
-        }
+        "ar_element": { "shape": "Pentagram", "color_hex": "#EF4444", "position": "SOUTH" }
       },
       {
         "order": 11,
         "action_type": "VIBRATION",
         "instruction_text": "Point to the center of the pentagram and vibrate the Divine Name.",
         "compass_direction": "SOUTH",
-        "audio_vibration": {
-          "word": "ADNI",
-          "phonetic": "Ah-doh-nai"
-        }
+        "audio_vibration": { "word": "ADNI", "phonetic": "Ah-doh-nai" }
       },
       {
         "order": 12,
@@ -115,21 +88,14 @@
         "action_type": "TRACE",
         "instruction_text": "Trace a banishing Earth pentagram before you in the air.",
         "compass_direction": "WEST",
-        "ar_element": {
-          "shape": "Pentagram",
-          "color_hex": "#3B82F6",
-          "position": "WEST"
-        }
+        "ar_element": { "shape": "Pentagram", "color_hex": "#3B82F6", "position": "WEST" }
       },
       {
         "order": 14,
         "action_type": "VIBRATION",
         "instruction_text": "Point to the center of the pentagram and vibrate the Divine Name.",
         "compass_direction": "WEST",
-        "audio_vibration": {
-          "word": "AHIH",
-          "phonetic": "Eh-heh-yeh"
-        }
+        "audio_vibration": { "word": "AHIH", "phonetic": "Eh-heh-yeh" }
       },
       {
         "order": 15,
@@ -142,21 +108,14 @@
         "action_type": "TRACE",
         "instruction_text": "Trace a banishing Earth pentagram before you in the air.",
         "compass_direction": "NORTH",
-        "ar_element": {
-          "shape": "Pentagram",
-          "color_hex": "#22C55E",
-          "position": "NORTH"
-        }
+        "ar_element": { "shape": "Pentagram", "color_hex": "#22C55E", "position": "NORTH" }
       },
       {
         "order": 17,
         "action_type": "VIBRATION",
         "instruction_text": "Point to the center of the pentagram and vibrate the Divine Name.",
         "compass_direction": "NORTH",
-        "audio_vibration": {
-          "word": "AGLA",
-          "phonetic": "Ah-geh-lah"
-        }
+        "audio_vibration": { "word": "AGLA", "phonetic": "Ah-geh-lah" }
       },
       {
         "order": 18,
@@ -178,46 +137,31 @@
         "order": 21,
         "action_type": "GESTURE",
         "instruction_text": "Repeat the Qabalistic Cross. Touch your forehead.",
-        "audio_vibration": {
-          "word": "Ateh",
-          "phonetic": "Ah-teh"
-        }
+        "audio_vibration": { "word": "Ateh", "phonetic": "Ah-teh" }
       },
       {
         "order": 22,
         "action_type": "GESTURE",
         "instruction_text": "Touch your chest, pointing downward.",
-        "audio_vibration": {
-          "word": "Malkuth",
-          "phonetic": "Mal-kooth"
-        }
+        "audio_vibration": { "word": "Malkuth", "phonetic": "Mal-kooth" }
       },
       {
         "order": 23,
         "action_type": "GESTURE",
         "instruction_text": "Touch your right shoulder.",
-        "audio_vibration": {
-          "word": "Ve-Geburah",
-          "phonetic": "Veh-Geh-boo-rah"
-        }
+        "audio_vibration": { "word": "Ve-Geburah", "phonetic": "Veh-Geh-boo-rah" }
       },
       {
         "order": 24,
         "action_type": "GESTURE",
         "instruction_text": "Touch your left shoulder.",
-        "audio_vibration": {
-          "word": "Ve-Gedulah",
-          "phonetic": "Veh-Geh-doo-lah"
-        }
+        "audio_vibration": { "word": "Ve-Gedulah", "phonetic": "Veh-Geh-doo-lah" }
       },
       {
         "order": 25,
         "action_type": "GESTURE",
         "instruction_text": "Clasp your hands upon your breast. The ritual is complete.",
-        "audio_vibration": {
-          "word": "Le-Olam, Amen",
-          "phonetic": "Leh-Oh-lahm, Ah-men"
-        }
+        "audio_vibration": { "word": "Le-Olam, Amen", "phonetic": "Leh-Oh-lahm, Ah-men" }
       }
     ]
   },
@@ -226,6 +170,8 @@
     "name": "Middle Pillar Exercise",
     "description": "An energy-building exercise that activates the central pillar of the Tree of Life within the practitioner's body.",
     "tradition": "Golden Dawn",
+    "intention": "Power",
+    "traditionTag": "Golden Dawn",
     "steps": [
       {
         "order": 1,
@@ -237,10 +183,7 @@
         "order": 2,
         "action_type": "VIBRATION",
         "instruction_text": "Focus on the white sphere above your head. Vibrate the Divine Name slowly and powerfully.",
-        "audio_vibration": {
-          "word": "AHIH",
-          "phonetic": "Eh-heh-yeh"
-        }
+        "audio_vibration": { "word": "AHIH", "phonetic": "Eh-heh-yeh" }
       },
       {
         "order": 3,
@@ -251,10 +194,7 @@
         "order": 4,
         "action_type": "VIBRATION",
         "instruction_text": "Focus on the lavender sphere at your throat. Vibrate the Divine Name.",
-        "audio_vibration": {
-          "word": "YHVH ALHIM",
-          "phonetic": "Yod-Heh-Vav-Heh El-oh-heem"
-        }
+        "audio_vibration": { "word": "YHVH ALHIM", "phonetic": "Yod-Heh-Vav-Heh El-oh-heem" }
       },
       {
         "order": 5,
@@ -265,10 +205,7 @@
         "order": 6,
         "action_type": "VIBRATION",
         "instruction_text": "Focus on the golden sphere at your heart. Vibrate the Divine Name.",
-        "audio_vibration": {
-          "word": "YHVH ALVH VDOTh",
-          "phonetic": "Yod-Heh-Vav-Heh El-oh-ah Veh-Da-ath"
-        }
+        "audio_vibration": { "word": "YHVH ALVH VDOTh", "phonetic": "Yod-Heh-Vav-Heh El-oh-ah Veh-Da-ath" }
       },
       {
         "order": 7,
@@ -279,10 +216,7 @@
         "order": 8,
         "action_type": "VIBRATION",
         "instruction_text": "Focus on the violet sphere. Vibrate the Divine Name.",
-        "audio_vibration": {
-          "word": "ShDI AL ChI",
-          "phonetic": "Shah-dai El Chai"
-        }
+        "audio_vibration": { "word": "ShDI AL ChI", "phonetic": "Shah-dai El Chai" }
       },
       {
         "order": 9,
@@ -293,15 +227,358 @@
         "order": 10,
         "action_type": "VIBRATION",
         "instruction_text": "Focus on the sphere at your feet. Vibrate the Divine Name.",
-        "audio_vibration": {
-          "word": "ADNI HARTz",
-          "phonetic": "Ah-doh-nai Ha-Ah-retz"
-        }
+        "audio_vibration": { "word": "ADNI HARTz", "phonetic": "Ah-doh-nai Ha-Ah-retz" }
       },
       {
         "order": 11,
         "action_type": "VISUALIZATION",
         "instruction_text": "Now visualize all five spheres connected by the central beam of light, pulsing with energy. Feel the Middle Pillar alive within you. The exercise is complete."
+      }
+    ]
+  },
+  {
+    "id": "sirp",
+    "name": "Supreme Invoking Ritual of the Pentagram",
+    "description": "An advanced invoking ritual that calls upon elemental forces. Uses the invoking pentagrams of each element at the four quarters.",
+    "tradition": "Golden Dawn",
+    "intention": "Power",
+    "traditionTag": "Golden Dawn",
+    "steps": [
+      {
+        "order": 1,
+        "action_type": "GESTURE",
+        "instruction_text": "Perform the Qabalistic Cross. Touch your forehead.",
+        "audio_vibration": { "word": "Ateh", "phonetic": "Ah-teh" }
+      },
+      {
+        "order": 2,
+        "action_type": "GESTURE",
+        "instruction_text": "Touch your chest, pointing downward.",
+        "audio_vibration": { "word": "Malkuth", "phonetic": "Mal-kooth" }
+      },
+      {
+        "order": 3,
+        "action_type": "GESTURE",
+        "instruction_text": "Touch your right shoulder, then left shoulder.",
+        "audio_vibration": { "word": "Ve-Geburah, Ve-Gedulah", "phonetic": "Veh-Geh-boo-rah, Veh-Geh-doo-lah" }
+      },
+      {
+        "order": 4,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Face East. Prepare to trace the Invoking Air Pentagram.",
+        "compass_direction": "EAST"
+      },
+      {
+        "order": 5,
+        "action_type": "TRACE",
+        "instruction_text": "Trace the Invoking Pentagram of Air. Vibrate the name of the element.",
+        "compass_direction": "EAST",
+        "ar_element": { "shape": "Pentagram", "color_hex": "#FFFF00", "position": "EAST" }
+      },
+      {
+        "order": 6,
+        "action_type": "VIBRATION",
+        "instruction_text": "Vibrate the Divine Name for Air.",
+        "compass_direction": "EAST",
+        "audio_vibration": { "word": "YHVH", "phonetic": "Yod-Heh-Vav-Heh" }
+      },
+      {
+        "order": 7,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the South. Trace a line of light.",
+        "compass_direction": "SOUTH"
+      },
+      {
+        "order": 8,
+        "action_type": "TRACE",
+        "instruction_text": "Trace the Invoking Pentagram of Fire.",
+        "compass_direction": "SOUTH",
+        "ar_element": { "shape": "Pentagram", "color_hex": "#EF4444", "position": "SOUTH" }
+      },
+      {
+        "order": 9,
+        "action_type": "VIBRATION",
+        "instruction_text": "Vibrate the Divine Name for Fire.",
+        "compass_direction": "SOUTH",
+        "audio_vibration": { "word": "ALHIM", "phonetic": "El-oh-heem" }
+      },
+      {
+        "order": 10,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the West.",
+        "compass_direction": "WEST"
+      },
+      {
+        "order": 11,
+        "action_type": "TRACE",
+        "instruction_text": "Trace the Invoking Pentagram of Water.",
+        "compass_direction": "WEST",
+        "ar_element": { "shape": "Pentagram", "color_hex": "#3B82F6", "position": "WEST" }
+      },
+      {
+        "order": 12,
+        "action_type": "VIBRATION",
+        "instruction_text": "Vibrate the Divine Name for Water.",
+        "compass_direction": "WEST",
+        "audio_vibration": { "word": "AL", "phonetic": "El" }
+      },
+      {
+        "order": 13,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the North.",
+        "compass_direction": "NORTH"
+      },
+      {
+        "order": 14,
+        "action_type": "TRACE",
+        "instruction_text": "Trace the Invoking Pentagram of Earth.",
+        "compass_direction": "NORTH",
+        "ar_element": { "shape": "Pentagram", "color_hex": "#22C55E", "position": "NORTH" }
+      },
+      {
+        "order": 15,
+        "action_type": "VIBRATION",
+        "instruction_text": "Vibrate the Divine Name for Earth.",
+        "compass_direction": "NORTH",
+        "audio_vibration": { "word": "AGLA", "phonetic": "Ah-geh-lah" }
+      },
+      {
+        "order": 16,
+        "action_type": "GESTURE",
+        "instruction_text": "Return to the East. Close with the Qabalistic Cross. The ritual is complete.",
+        "compass_direction": "EAST",
+        "audio_vibration": { "word": "Le-Olam, Amen", "phonetic": "Leh-Oh-lahm, Ah-men" }
+      }
+    ]
+  },
+  {
+    "id": "star_ruby",
+    "name": "The Star Ruby",
+    "description": "Aleister Crowley's Thelemic adaptation of the LBRP. A powerful banishing ritual using Greek god-names and the Sign of Harpocrates.",
+    "tradition": "Thelema",
+    "intention": "Purification",
+    "traditionTag": "Thelema",
+    "steps": [
+      {
+        "order": 1,
+        "action_type": "GESTURE",
+        "instruction_text": "Stand in the center. Touch your forehead with your right hand.",
+        "audio_vibration": { "word": "SOI", "phonetic": "Soy" }
+      },
+      {
+        "order": 2,
+        "action_type": "GESTURE",
+        "instruction_text": "Touch your groin area.",
+        "audio_vibration": { "word": "O PHALLE", "phonetic": "Oh Fal-leh" }
+      },
+      {
+        "order": 3,
+        "action_type": "GESTURE",
+        "instruction_text": "Touch your right shoulder.",
+        "audio_vibration": { "word": "ISCHUROS", "phonetic": "Is-koo-ros" }
+      },
+      {
+        "order": 4,
+        "action_type": "GESTURE",
+        "instruction_text": "Touch your left shoulder.",
+        "audio_vibration": { "word": "EUCHARISTOS", "phonetic": "Yoo-ka-ris-tos" }
+      },
+      {
+        "order": 5,
+        "action_type": "GESTURE",
+        "instruction_text": "Clasp your hands upon your breast.",
+        "audio_vibration": { "word": "IAO", "phonetic": "Ee-Ah-Oh" }
+      },
+      {
+        "order": 6,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the East.",
+        "compass_direction": "EAST"
+      },
+      {
+        "order": 7,
+        "action_type": "TRACE",
+        "instruction_text": "Trace a banishing pentagram in the East.",
+        "compass_direction": "EAST",
+        "ar_element": { "shape": "Pentagram", "color_hex": "#FFD700", "position": "EAST" }
+      },
+      {
+        "order": 8,
+        "action_type": "VIBRATION",
+        "instruction_text": "Charge the pentagram with the name.",
+        "compass_direction": "EAST",
+        "audio_vibration": { "word": "THERION", "phonetic": "Theh-ree-on" }
+      },
+      {
+        "order": 9,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the South.",
+        "compass_direction": "SOUTH"
+      },
+      {
+        "order": 10,
+        "action_type": "TRACE",
+        "instruction_text": "Trace a banishing pentagram in the South.",
+        "compass_direction": "SOUTH",
+        "ar_element": { "shape": "Pentagram", "color_hex": "#EF4444", "position": "SOUTH" }
+      },
+      {
+        "order": 11,
+        "action_type": "VIBRATION",
+        "instruction_text": "Charge the pentagram.",
+        "compass_direction": "SOUTH",
+        "audio_vibration": { "word": "NUIT", "phonetic": "Noo-eet" }
+      },
+      {
+        "order": 12,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the West.",
+        "compass_direction": "WEST"
+      },
+      {
+        "order": 13,
+        "action_type": "TRACE",
+        "instruction_text": "Trace a banishing pentagram in the West.",
+        "compass_direction": "WEST",
+        "ar_element": { "shape": "Pentagram", "color_hex": "#3B82F6", "position": "WEST" }
+      },
+      {
+        "order": 14,
+        "action_type": "VIBRATION",
+        "instruction_text": "Charge the pentagram.",
+        "compass_direction": "WEST",
+        "audio_vibration": { "word": "BABALON", "phonetic": "Bab-ah-lon" }
+      },
+      {
+        "order": 15,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the North.",
+        "compass_direction": "NORTH"
+      },
+      {
+        "order": 16,
+        "action_type": "TRACE",
+        "instruction_text": "Trace a banishing pentagram in the North.",
+        "compass_direction": "NORTH",
+        "ar_element": { "shape": "Pentagram", "color_hex": "#22C55E", "position": "NORTH" }
+      },
+      {
+        "order": 17,
+        "action_type": "VIBRATION",
+        "instruction_text": "Charge the pentagram.",
+        "compass_direction": "NORTH",
+        "audio_vibration": { "word": "HADIT", "phonetic": "Ha-deet" }
+      },
+      {
+        "order": 18,
+        "action_type": "VISUALIZATION",
+        "instruction_text": "Extend your arms in the form of Tau. Visualize the four pentagrams blazing at the quarters. Say: Pro Mou Iunges, Opiso Mou Teletarchai, Epi Dexia Sunoches, Ep Aristera Daimones."
+      },
+      {
+        "order": 19,
+        "action_type": "GESTURE",
+        "instruction_text": "Make the Sign of Harpocrates (finger to lips). The ritual is complete.",
+        "audio_vibration": { "word": "ABRAHADABRA", "phonetic": "Ab-ra-ha-dab-ra" }
+      }
+    ]
+  },
+  {
+    "id": "hammer_rite",
+    "name": "The Hammer Rite",
+    "description": "A Norse-inspired ritual for consecrating and protecting a space using the power of Thor's hammer Mjölnir.",
+    "tradition": "Norse",
+    "intention": "Protection",
+    "traditionTag": "Norse",
+    "steps": [
+      {
+        "order": 1,
+        "action_type": "GESTURE",
+        "instruction_text": "Stand in the center of your space. Close your eyes and feel the roots of Yggdrasil beneath your feet."
+      },
+      {
+        "order": 2,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Face North. Raise your right hand high, then bring it down forcefully as if striking with a hammer.",
+        "compass_direction": "NORTH"
+      },
+      {
+        "order": 3,
+        "action_type": "VIBRATION",
+        "instruction_text": "As you strike, call upon the Thunderer.",
+        "compass_direction": "NORTH",
+        "audio_vibration": { "word": "THUNOR", "phonetic": "Thoo-nor" }
+      },
+      {
+        "order": 4,
+        "action_type": "TRACE",
+        "instruction_text": "Trace the Hammer sign (an inverted T) in the air before you to the North.",
+        "compass_direction": "NORTH",
+        "ar_element": { "shape": "Cross", "color_hex": "#A0A0A0", "position": "NORTH" }
+      },
+      {
+        "order": 5,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the East.",
+        "compass_direction": "EAST"
+      },
+      {
+        "order": 6,
+        "action_type": "VIBRATION",
+        "instruction_text": "Strike the hammer sign to the East.",
+        "compass_direction": "EAST",
+        "audio_vibration": { "word": "THUNOR", "phonetic": "Thoo-nor" }
+      },
+      {
+        "order": 7,
+        "action_type": "TRACE",
+        "instruction_text": "Trace the Hammer sign to the East.",
+        "compass_direction": "EAST",
+        "ar_element": { "shape": "Cross", "color_hex": "#A0A0A0", "position": "EAST" }
+      },
+      {
+        "order": 8,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the South.",
+        "compass_direction": "SOUTH"
+      },
+      {
+        "order": 9,
+        "action_type": "VIBRATION",
+        "instruction_text": "Strike the hammer sign to the South.",
+        "compass_direction": "SOUTH",
+        "audio_vibration": { "word": "THUNOR", "phonetic": "Thoo-nor" }
+      },
+      {
+        "order": 10,
+        "action_type": "TRACE",
+        "instruction_text": "Trace the Hammer sign to the South.",
+        "compass_direction": "SOUTH",
+        "ar_element": { "shape": "Cross", "color_hex": "#A0A0A0", "position": "SOUTH" }
+      },
+      {
+        "order": 11,
+        "action_type": "MOVEMENT",
+        "instruction_text": "Turn to face the West.",
+        "compass_direction": "WEST"
+      },
+      {
+        "order": 12,
+        "action_type": "VIBRATION",
+        "instruction_text": "Strike the hammer sign to the West.",
+        "compass_direction": "WEST",
+        "audio_vibration": { "word": "THUNOR", "phonetic": "Thoo-nor" }
+      },
+      {
+        "order": 13,
+        "action_type": "TRACE",
+        "instruction_text": "Trace the Hammer sign to the West.",
+        "compass_direction": "WEST",
+        "ar_element": { "shape": "Cross", "color_hex": "#A0A0A0", "position": "WEST" }
+      },
+      {
+        "order": 14,
+        "action_type": "VISUALIZATION",
+        "instruction_text": "Return to the North. Visualize four glowing Hammer signs at the quarters, connected by a ring of lightning. Your space is consecrated. Hail Thor!"
       }
     ]
   }

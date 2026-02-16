@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Aspectarian Engine
+// ÆONIS – Aspectarian Engine
 // Calculates planetary aspects (Conjunction, Opposition, Square, Trine, Sextile)
 // ============================================================
 

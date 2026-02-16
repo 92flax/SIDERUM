@@ -1,7 +1,7 @@
-# SIDERUM – Mobile App Interface Design
+# ÆONIS – Mobile App Interface Design
 
 ## App Concept
-SIDERUM is a professional-grade astrology and ritual application for classical astrologers and ceremonial magicians. The design follows the "Cyber-Grimoire" aesthetic: minimalist, OLED-optimized dark mode with thin lines, high contrast for night vision preservation.
+ÆONIS is a professional-grade astrology and ritual application for classical astrologers and ceremonial magicians. The design follows the "Cyber-Grimoire" aesthetic: minimalist, OLED-optimized dark mode with thin lines, high contrast for night vision preservation.
 
 ---
 

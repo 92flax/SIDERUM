@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Paywall Modal ("Upgrade to Adeptus")
+// ÆONIS – Paywall Modal ("Upgrade to ÆONIS Adeptus")
 // Sleek modal with benefits list and upgrade CTA
 // ============================================================
 
@@ -62,7 +62,7 @@ export function PaywallModal({ visible, onClose, featureId }: PaywallModalProps)
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             {/* Header */}
             <Text style={styles.lockIcon}>🔒</Text>
-            <Text style={styles.title}>SIDERUM Adeptus</Text>
+            <Text style={styles.title}>ÆONIS Adeptus</Text>
             <Text style={styles.subtitle}>Unlock the Full Grimoire</Text>
 
             {/* Triggered feature highlight */}
@@ -138,7 +138,7 @@ export function PaywallModal({ visible, onClose, featureId }: PaywallModalProps)
               onPress={handleUpgrade}
               style={({ pressed }) => [styles.upgradeBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
             >
-              <Text style={styles.upgradeBtnText}>Upgrade to Adeptus</Text>
+              <Text style={styles.upgradeBtnText}>Upgrade to ÆONIS Adeptus</Text>
             </Pressable>
 
             {/* Restore */}

@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Elder Futhark Rune Dictionary & Bindrune Generator
+// ÆONIS – Elder Futhark Rune Dictionary & Bindrune Generator
 // Beta: Absolute Stacking strategy – full rune SVGs layered
 // ============================================================
 

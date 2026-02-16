@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Planetary Hours Calculator (Chaldean Order)
+// ÆONIS – Planetary Hours Calculator (Chaldean Order)
 // ============================================================
 
 import * as Astronomy from 'astronomy-engine';

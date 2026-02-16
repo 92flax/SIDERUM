@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Holo-Pad V3: Intent-Aware Tracing with Ghost Guide
+// ÆONIS – Holo-Pad V3: Intent-Aware Tracing with Ghost Guide
 // Correct Golden Dawn pentagram directions, Start-Anchor Halo,
 // Ghost Particle, breathing path, sparkler trail
 // ============================================================
@@ -18,6 +18,13 @@ import Animated, {
 
 export type RitualIntent = 'BANISH' | 'INVOKE';
 
+interface SigilLine {
+  x1: number; y1: number; x2: number; y2: number; key: string;
+}
+interface SigilPath {
+  d: string; key: string;
+}
+
 interface HoloPadProps {
   shape: string;          // e.g. "Pentagram", "Hexagram", "Cross", "Circle"
   colorHex: string;       // e.g. "#3B82F6"
@@ -25,6 +32,11 @@ interface HoloPadProps {
   onSimulateTrace?: () => void;  // Web fallback
   intent?: RitualIntent;  // BANISH or INVOKE (affects pentagram direction)
   isLBRP?: boolean;       // Force Electric Blue for LBRP Banish
+  // AR Sigil Anchor: bindrune lines/paths to render pulsing in center
+  sigilLines?: SigilLine[];
+  sigilPaths?: SigilPath[];
+  sigilWidth?: number;
+  sigilHeight?: number;
 }
 
 // ---- Geometry helpers ----
@@ -164,7 +176,7 @@ interface TrailPoint {
   id: number;
 }
 
-export function HoloPad({ shape, colorHex, isTraced, onSimulateTrace, intent = 'BANISH', isLBRP = false }: HoloPadProps) {
+export function HoloPad({ shape, colorHex, isTraced, onSimulateTrace, intent = 'BANISH', isLBRP = false, sigilLines, sigilPaths, sigilWidth, sigilHeight }: HoloPadProps) {
   const size = 260;
   const cx = size / 2;
   const cy = size / 2;
@@ -546,6 +558,91 @@ export function HoloPad({ shape, colorHex, isTraced, onSimulateTrace, intent = '
               }
               d += ' Z';
               return <Path d={d} fill="#D4AF37" opacity={0.2} />;
+            })()}
+
+            {/* ===== AR Sigil Anchor: Bindrune pulsing in center ===== */}
+            {(sigilLines?.length || sigilPaths?.length) && (() => {
+              // Scale the bindrune to fit inside the shape (about 40% of the shape radius)
+              const sigilScale = (r * 0.7) / (sigilHeight || 300);
+              const sigilOffsetX = cx - ((sigilWidth || 200) / 2) * sigilScale;
+              const sigilOffsetY = cy - ((sigilHeight || 300) / 2) * sigilScale;
+              const sigilColor = isTraced ? '#D4AF37' : '#FFFFFF';
+              const sigilOpacity = isTraced ? 0.8 : 0.35;
+
+              return (
+                <G opacity={sigilOpacity}>
+                  {/* Sigil glow layer */}
+                  {sigilLines?.map((l) => (
+                    <Line
+                      key={`sg-${l.key}`}
+                      x1={sigilOffsetX + l.x1 * sigilScale}
+                      y1={sigilOffsetY + l.y1 * sigilScale}
+                      x2={sigilOffsetX + l.x2 * sigilScale}
+                      y2={sigilOffsetY + l.y2 * sigilScale}
+                      stroke={sigilColor}
+                      strokeWidth={3}
+                      strokeLinecap="square"
+                      opacity={0.3}
+                    />
+                  ))}
+                  {sigilPaths?.map((p) => {
+                    // Transform the path d string by scaling and offsetting
+                    const transformed = p.d.replace(/(\d+\.?\d*)/g, (match, num, offset, str) => {
+                      // Alternate between x and y coordinates
+                      return match; // We'll use the G transform instead
+                    });
+                    return (
+                      <Path
+                        key={`sp-${p.key}`}
+                        d={p.d}
+                        stroke={sigilColor}
+                        strokeWidth={3 / sigilScale}
+                        strokeLinecap="square"
+                        fill="none"
+                        opacity={0.3}
+                        transform={`translate(${sigilOffsetX}, ${sigilOffsetY}) scale(${sigilScale})`}
+                      />
+                    );
+                  })}
+                  {/* Sigil core layer */}
+                  {sigilLines?.map((l) => (
+                    <Line
+                      key={`sc-${l.key}`}
+                      x1={sigilOffsetX + l.x1 * sigilScale}
+                      y1={sigilOffsetY + l.y1 * sigilScale}
+                      x2={sigilOffsetX + l.x2 * sigilScale}
+                      y2={sigilOffsetY + l.y2 * sigilScale}
+                      stroke={sigilColor}
+                      strokeWidth={1.5}
+                      strokeLinecap="square"
+                      opacity={0.7}
+                    />
+                  ))}
+                  {sigilPaths?.map((p) => (
+                    <Path
+                      key={`spc-${p.key}`}
+                      d={p.d}
+                      stroke={sigilColor}
+                      strokeWidth={1.5 / sigilScale}
+                      strokeLinecap="square"
+                      fill="none"
+                      opacity={0.7}
+                      transform={`translate(${sigilOffsetX}, ${sigilOffsetY}) scale(${sigilScale})`}
+                    />
+                  ))}
+                  {/* Central spine */}
+                  <Line
+                    x1={cx}
+                    y1={sigilOffsetY}
+                    x2={cx}
+                    y2={sigilOffsetY + (sigilHeight || 300) * sigilScale}
+                    stroke={sigilColor}
+                    strokeWidth={2}
+                    strokeLinecap="square"
+                    opacity={0.5}
+                  />
+                </G>
+              );
             })()}
           </Svg>
         </View>

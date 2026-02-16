@@ -1,5 +1,5 @@
 // ============================================================
-// SIDERUM – Ritual Engine Store (State Machine)
+// ÆONIS – Ritual Engine Store (State Machine)
 // ============================================================
 
 import { create } from 'zustand';

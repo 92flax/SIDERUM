@@ -81,6 +81,28 @@ export default function RunicForgeScreen() {
     return generateBindruneData(selectedRunes, 240, 340);
   }, [selectedRunes]);
 
+  // Talisman Wallet: Calculate average dignity score for selected runes
+  const talismapowerScore = useMemo(() => {
+    if (!chartData || selectedRunes.length === 0) return 0;
+    let totalScore = 0;
+    let count = 0;
+    selectedRunes.forEach(rune => {
+      if (rune.planet && chartData.dignities[rune.planet]) {
+        totalScore += chartData.dignities[rune.planet].score;
+        count++;
+      }
+    });
+    return count > 0 ? Math.round(totalScore / count) : 0;
+  }, [selectedRunes, chartData]);
+
+  // Determine glow color based on dignity score (Talisman Wallet)
+  const talismapowerGlow = useMemo(() => {
+    if (talismapowerScore >= 5) return '#FFD700'; // Golden Aura for high dignity
+    if (talismapowerScore >= 2) return '#D4AF37'; // Warm gold
+    if (talismapowerScore >= 0) return '#A0A0A0'; // Silver/neutral
+    return '#EF4444'; // Red for negative dignity
+  }, [talismapowerScore]);
+
   // Astro warnings
   const astroWarnings = useMemo(() => {
     if (!chartData) return [];
@@ -344,6 +366,51 @@ export default function RunicForgeScreen() {
             <Text style={styles.compositionLabel}>
               {selectedRunes.map(r => r.symbol).join(' + ')}
             </Text>
+
+            {/* Talisman Wallet: Dignity Power Score */}
+            {chartData && selectedRunes.some(r => r.planet) && (
+              <View style={[
+                styles.talismapowerBox,
+                { borderColor: talismapowerGlow + '40' },
+              ]}>
+                <Text style={[styles.talismapowerLabel, { color: talismapowerGlow }]}>TALISMAN RESONANCE</Text>
+                <View style={styles.talismapowerRow}>
+                  <Text style={[
+                    styles.talismapowerScore,
+                    { color: talismapowerGlow },
+                    talismapowerScore >= 5 && {
+                      textShadowColor: '#FFD700',
+                      textShadowOffset: { width: 0, height: 0 },
+                      textShadowRadius: 12,
+                    },
+                  ]}>
+                    {talismapowerScore > 0 ? '+' : ''}{talismapowerScore}
+                  </Text>
+                  <Text style={styles.talismapowerVerdict}>
+                    {talismapowerScore >= 5 ? 'Exceptional Power – Golden Aura Active' :
+                     talismapowerScore >= 2 ? 'Strong Resonance – Favorable Alignment' :
+                     talismapowerScore >= 0 ? 'Neutral – Standard Potency' :
+                     'Weakened – Planetary Debility Detected'}
+                  </Text>
+                </View>
+                {selectedRunes.filter(r => r.planet).map(rune => {
+                  const dignity = chartData.dignities[rune.planet!];
+                  if (!dignity) return null;
+                  return (
+                    <View key={rune.name} style={styles.talismapowerRune}>
+                      <Text style={styles.talismapowerRuneSymbol}>{rune.symbol}</Text>
+                      <Text style={styles.talismapowerRuneName}>{rune.name}</Text>
+                      <Text style={[
+                        styles.talismapowerRuneScore,
+                        { color: dignity.score >= 3 ? '#22C55E' : dignity.score >= 0 ? '#6B6B6B' : '#EF4444' },
+                      ]}>
+                        {dignity.score > 0 ? '+' : ''}{dignity.score}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
         ) : (
           <View style={styles.emptyState}>
@@ -455,4 +522,24 @@ const styles = StyleSheet.create({
   runeGridSymbol: { fontSize: 24, color: '#6B6B6B' },
   runeGridSymbolSelected: { color: '#D4AF37' },
   runeGridName: { fontSize: 8, color: '#6B6B6B', marginTop: 2 },
+
+  // Talisman Wallet
+  talismapowerBox: {
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 12,
+    padding: 14, marginTop: 16,
+  },
+  talismapowerLabel: {
+    fontFamily: 'JetBrainsMono', fontSize: 10, letterSpacing: 2,
+    textAlign: 'center', marginBottom: 8,
+  },
+  talismapowerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, justifyContent: 'center' },
+  talismapowerScore: { fontFamily: 'Cinzel', fontSize: 28, fontWeight: '700' },
+  talismapowerVerdict: { fontSize: 12, color: '#6B6B6B', flex: 1, lineHeight: 18 },
+  talismapowerRune: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#1A1A1A',
+  },
+  talismapowerRuneSymbol: { fontSize: 18, color: '#D4AF37', width: 28, textAlign: 'center' },
+  talismapowerRuneName: { fontSize: 12, color: '#E0E0E0', flex: 1 },
+  talismapowerRuneScore: { fontFamily: 'JetBrainsMono', fontSize: 13, fontWeight: '700' },
 });

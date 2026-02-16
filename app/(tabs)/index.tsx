@@ -153,7 +153,7 @@ export default function HomeScreen() {
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Title & Date */}
-        <Text style={styles.title}>SIDERUM</Text>
+        <Text style={styles.title}>ÆONIS</Text>
         <Text style={styles.subtitle}>
           {date.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
           {'  '}

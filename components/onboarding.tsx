@@ -20,24 +20,24 @@ interface Slide {
 
 const SLIDES: Slide[] = [
   {
-    id: 'astro',
-    title: 'Celestial Intelligence',
-    subtitle: 'Astrological Core',
-    description: 'Real-time planetary positions with Essential Dignities, Aspects, and Event Horizon predictions. Powered by Swiss Ephemeris-grade calculations.',
+    id: 'welcome',
+    title: 'Welcome to \u00c6ONIS',
+    subtitle: 'Your Cosmic Command Center',
+    description: 'A professional-grade ritual and astrological toolkit. Real-time planetary positions, Essential Dignities, Aspects, and Event Horizon predictions at your fingertips.',
     icon: 'stars',
   },
   {
-    id: 'ritual',
-    title: 'Ritual Compass',
-    subtitle: 'Sensor-Fused Navigation',
-    description: 'AR overlay and radar view with magnetometer fusion. Align to cardinal directions, trace sacred geometry on the Holo-Pad, and perform step-by-step rituals.',
+    id: 'calibration',
+    title: 'AR Calibration',
+    subtitle: 'Hold Phone at Horizon',
+    description: 'The Ritual Compass uses your device sensors to track celestial bodies in real-time. Hold your phone level at the horizon for best results. Tilt up to see planets above, down for those below.',
     icon: 'compass',
   },
   {
-    id: 'runes',
-    title: 'Runic Forge',
-    subtitle: 'Bindrune Generator',
-    description: 'Combine Elder Futhark runes into powerful Bindrunes with the Absolute Stacking engine. Filter by astrological conditions for optimal timing.',
+    id: 'intent',
+    title: 'Set Your Intent',
+    subtitle: 'Banish or Invoke',
+    description: 'Every ritual begins with intent. Choose BANISH to clear unwanted energies (Earth \u2192 Spirit) or INVOKE to draw power inward (Spirit \u2192 Earth). The pentagram direction changes accordingly.',
     icon: 'rune',
   },
 ];
@@ -272,7 +272,7 @@ export function OnboardingScreen({ onComplete }: OnboardingProps) {
           ]}
         >
           <Text style={[styles.nextBtnText, isLastSlide && styles.nextBtnTextFinal]}>
-            {isLastSlide ? 'Enter SIDERUM' : 'Next'}
+            {isLastSlide ? 'Enter \u00c6ONIS' : 'Next'}
           </Text>
         </Pressable>
       </View>
