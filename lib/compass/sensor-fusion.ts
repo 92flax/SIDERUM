@@ -1,6 +1,6 @@
 // ============================================================
 // ÆONIS – Sensor Fusion for Ritual Compass
-// Low-pass filtered, 180° corrected, frame-rate aware
+// Corrected 180° heading, robust low-pass filter, frame-aware
 // ============================================================
 
 import { Platform } from 'react-native';
@@ -31,8 +31,14 @@ export function resetHeadingFilter(): void {
 }
 
 /**
- * Calculate compass heading from magnetometer data with low-pass filter.
- * Includes 180° inversion fix for correct orientation.
+ * Calculate compass heading from magnetometer data.
+ *
+ * FIX: The previous formula produced a 180° inverted result.
+ * Correct approach:
+ *   1. atan2(-magX, magY) → raw angle from magnetic north
+ *   2. Normalize to 0-360
+ *   3. Add 180° to correct the inversion
+ *   4. Apply low-pass filter for stabilization
  */
 export function calculateHeading(magX: number, magY: number): number {
   // atan2(-magX, magY) gives angle from magnetic north (Y-axis) clockwise
@@ -40,16 +46,16 @@ export function calculateHeading(magX: number, magY: number): number {
   // Normalize to 0-360
   rawHeading = ((rawHeading % 360) + 360) % 360;
 
-  // Apply 180° inversion fix
+  // Apply 180° inversion fix — corrects the reversed compass direction
   rawHeading = (rawHeading + 180) % 360;
 
-  // Low-pass filter for stabilization
+  // Low-pass filter for stabilization: smoothed = prev*0.95 + curr*0.05
   if (_prevHeading === null) {
     _prevHeading = rawHeading;
     return rawHeading;
   }
 
-  // Handle wrap-around (e.g. 359° -> 1°)
+  // Handle wrap-around (e.g. 359° -> 1°) using shortest-arc interpolation
   let diff = rawHeading - _prevHeading;
   if (diff > 180) diff -= 360;
   if (diff < -180) diff += 360;
@@ -64,10 +70,7 @@ export function calculateHeading(magX: number, magY: number): number {
  * Respects gravity (Y-axis) for stable horizon line.
  */
 export function calculateOrientation(accX: number, accY: number, accZ: number): { pitch: number; roll: number } {
-  // pitch: angle of device tilt forward/backward
-  // Using atan2 with gravity vector for stable calculation
   const pitch = Math.atan2(-accX, Math.sqrt(accY * accY + accZ * accZ)) * (180 / Math.PI);
-  // roll: angle of device tilt left/right, respecting gravity on Y-axis
   const roll = Math.atan2(accY, accZ) * (180 / Math.PI);
   return { pitch, roll };
 }
@@ -79,12 +82,8 @@ export function isAlignedToDirection(
   tolerance: number = 15,
 ): boolean {
   const directionMap: Record<string, number> = {
-    NORTH: 0,
-    EAST: 90,
-    SOUTH: 180,
-    WEST: 270,
-    ZENITH: -1, // special: check pitch
-    NADIR: -2,  // special: check pitch
+    NORTH: 0, EAST: 90, SOUTH: 180, WEST: 270,
+    ZENITH: -1, NADIR: -2,
   };
 
   const targetDeg = directionMap[targetDirection];

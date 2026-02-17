@@ -280,3 +280,19 @@
 - [x] Install and use lucide-react-native for tab bar icons
 - [x] Tab icons: Home→Home, Sanctum→Flame, Radar→Compass, Path→Trophy, Adept→User
 - [x] Compass smoothing factor tied to frame rate
+
+## Radar Redesign – Magical AR Astrolabe
+
+### Compass Logic Fix
+- [x] Fix 180° inversion in calculateHeading: return (degrees + 180) % 360
+- [x] Ensure Low-Pass Filter active: smoothed = prev*0.95 + curr*0.05
+
+### Radar UI Redesign
+- [x] AR Viewfinder: Full-screen camera feed with gold reticle crosshair overlay
+- [x] Reticle glow feedback: Cyan glow when aligned with cardinal direction or planet
+- [x] Rotating Compass Ring (Runic/Zodiac SVG wheel) at bottom-center
+- [x] Ring rotates based on heading so North matches True North
+- [x] Top Bar: Glassmorphism panel with Azimuth + Planetary Hour
+- [x] Bottom Sheet: Swipe-up glass panel with merged planetary list from chart.tsx
+- [x] Planet rows: Icon, Name, Degree, Zodiac Sign
+- [x] Glassmorphism style: blur 20, opacity 0.8 dark, 1px gold border

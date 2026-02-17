@@ -1,36 +1,44 @@
 // ============================================================
-// ÆONIS – Radar Screen (Digital Grimoire)
-// Merged: compass.tsx (AR/Radar) + chart.tsx (PlanetCard list)
-// Top: AR/Radar toggle view
-// Bottom: Glassmorphism ScrollView with PlanetCards + Aspectarian
+// ÆONIS – Magical AR Astrolabe (Radar Screen)
+// Premium redesign: Reticle, Rotating Compass Ring,
+// Glassmorphism HUD, merged PlanetCard bottom sheet
 // ============================================================
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Text, View, StyleSheet, Dimensions, Platform, Pressable, Modal, ScrollView } from 'react-native';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import {
+  Text, View, StyleSheet, Dimensions, Platform, Pressable,
+  Modal, ScrollView, Animated,
+} from 'react-native';
 import { Magnetometer, DeviceMotion } from 'expo-sensors';
-import Svg, { Circle, Line, Text as SvgText, G, Rect } from 'react-native-svg';
+import Svg, {
+  Circle, Line, Text as SvgText, G, Path, Defs,
+  RadialGradient, Stop, Rect,
+} from 'react-native-svg';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { ScreenContainer } from '@/components/screen-container';
 import { PaywallModal, ProBadge } from '@/components/paywall-modal';
 import { useAstroStore } from '@/lib/astro/store';
 import { useProStore } from '@/lib/store/pro-store';
-import { calculateHeading } from '@/lib/compass/sensor-fusion';
+import { calculateHeading, resetHeadingFilter } from '@/lib/compass/sensor-fusion';
 import { getMajorAspects, Aspect } from '@/lib/astro/aspects';
+import { calculatePlanetaryHours } from '@/lib/astro/planetary-hours';
 import {
   PLANET_SYMBOLS, ZODIAC_SYMBOLS, PLANET_COLORS, Planet,
   PlanetPosition, EssentialDignity, PlanetCondition,
 } from '@/lib/astro/types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const RADAR_SIZE = Math.min(SCREEN_WIDTH - 64, 320);
-const RADAR_CENTER = RADAR_SIZE / 2;
-const RADAR_RADIUS = RADAR_SIZE / 2 - 30;
-
-type ViewMode = 'radar' | 'ar';
+const RING_SIZE = Math.min(SCREEN_WIDTH - 32, 360);
+const RING_CENTER = RING_SIZE / 2;
+const RING_OUTER_R = RING_SIZE / 2 - 8;
+const RING_INNER_R = RING_OUTER_R - 36;
 
 const PLANET_NAMES: Record<string, string> = {
   Sun: 'Sun', Moon: 'Moon', Mercury: 'Mercury', Venus: 'Venus',
   Mars: 'Mars', Jupiter: 'Jupiter', Saturn: 'Saturn',
+  Uranus: 'Uranus', Neptune: 'Neptune', Pluto: 'Pluto',
+  NorthNode: 'N.Node', SouthNode: 'S.Node', Lilith: 'Lilith',
 };
 
 const PLANET_INFO: Record<string, { element: string; principle: string; description: string }> = {
@@ -79,39 +87,44 @@ const MOCK_POSITIONS: Record<string, { azimuth: number; altitude: number }> = {
   Saturn: { azimuth: 45, altitude: 10 },
 };
 
-interface ResolvedPosition {
-  planet: PlanetPosition;
-  px: number; py: number;
-  labelX: number; labelY: number;
-  color: string;
-}
+// Zodiac sign glyphs for the compass ring
+const ZODIAC_RING = [
+  { sign: '♈', deg: 0 }, { sign: '♉', deg: 30 }, { sign: '♊', deg: 60 },
+  { sign: '♋', deg: 90 }, { sign: '♌', deg: 120 }, { sign: '♍', deg: 150 },
+  { sign: '♎', deg: 180 }, { sign: '♏', deg: 210 }, { sign: '♐', deg: 240 },
+  { sign: '♑', deg: 270 }, { sign: '♒', deg: 300 }, { sign: '♓', deg: 330 },
+];
+
+// Runic tick marks for the compass ring (24 Elder Futhark divisions)
+const RUNE_TICKS = Array.from({ length: 24 }, (_, i) => i * 15);
 
 function safeNum(val: number | undefined, fallback: number): number {
   if (val === undefined || val === null || !isFinite(val) || isNaN(val)) return fallback;
   return val;
 }
 
-function resolveCollisions(positions: ResolvedPosition[], minDist: number = 28): ResolvedPosition[] {
-  const resolved = [...positions];
-  for (let iter = 0; iter < 5; iter++) {
-    for (let i = 0; i < resolved.length; i++) {
-      for (let j = i + 1; j < resolved.length; j++) {
-        const dx = resolved[j].labelX - resolved[i].labelX;
-        const dy = resolved[j].labelY - resolved[i].labelY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < minDist && dist > 0) {
-          const overlap = (minDist - dist) / 2;
-          const nx = dx / dist;
-          const ny = dy / dist;
-          resolved[i].labelX -= nx * overlap;
-          resolved[i].labelY -= ny * overlap;
-          resolved[j].labelX += nx * overlap;
-          resolved[j].labelY += ny * overlap;
-        }
-      }
-    }
-  }
-  return resolved;
+function getCardinalDirection(heading: number): string {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return dirs[Math.round(heading / 45) % 8];
+}
+
+function isCardinalAligned(heading: number): boolean {
+  const cardinals = [0, 90, 180, 270];
+  return cardinals.some(c => {
+    let diff = Math.abs(heading - c);
+    if (diff > 180) diff = 360 - diff;
+    return diff <= 5;
+  });
+}
+
+function isPlanetAligned(heading: number, planets: Array<{ azimuth?: number }>): boolean {
+  return planets.some(p => {
+    const az = safeNum(p.azimuth, -999);
+    if (az < 0) return false;
+    let diff = Math.abs(heading - az);
+    if (diff > 180) diff = 360 - diff;
+    return diff <= 8;
+  });
 }
 
 function getScoreVerdict(score: number): { text: string; color: string } {
@@ -135,34 +148,35 @@ function getAspectColor(type: string): string {
   }
 }
 
-function getCardinalDirection(heading: number): string {
-  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-  return dirs[Math.round(heading / 45) % 8];
-}
-
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
 export default function RadarScreen() {
-  const [viewMode, setViewMode] = useState<ViewMode>('radar');
   const [heading, setHeading] = useState(0);
   const [pitch, setPitch] = useState(0);
   const [sensorAvailable, setSensorAvailable] = useState(true);
-  const [focusedPlanet, setFocusedPlanet] = useState<Planet | null>(null);
   const [infoPlanet, setInfoPlanet] = useState<string | null>(null);
-  const [showSheet, setShowSheet] = useState(true);
-  const [showAspectarian, setShowAspectarian] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showAspectarian, setShowAspectarian] = useState(false);
   const [selectedAspect, setSelectedAspect] = useState<Aspect | null>(null);
   const [selectedDignity, setSelectedDignity] = useState<string | null>(null);
 
+  // Reticle glow animation
+  const reticleGlow = useRef(new Animated.Value(0)).current;
+
   const chartData = useAstroStore((s) => s.chartData);
+  const location = useAstroStore((s) => s.location);
+  const date = useAstroStore((s) => s.date);
   const recalculate = useAstroStore((s) => s.recalculate);
   const isFeatureUnlocked = useProStore((s) => s.isFeatureUnlocked);
 
   useEffect(() => { recalculate(); }, []);
 
-  // Magnetometer
+  // Magnetometer subscription
   useEffect(() => {
     if (Platform.OS === ('web' as string)) { setSensorAvailable(false); return; }
     let magSub: any;
+    resetHeadingFilter();
     const subscribe = async () => {
       try {
         const available = await Magnetometer.isAvailableAsync();
@@ -201,6 +215,7 @@ export default function RadarScreen() {
     return () => { motionSub?.remove(); };
   }, []);
 
+  // Planets with mock fallback
   const planets = useMemo(() => {
     const raw = chartData?.planets.filter(p =>
       ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'].includes(p.planet)
@@ -211,192 +226,209 @@ export default function RadarScreen() {
     });
   }, [chartData]);
 
-  const aspects = useMemo(() => {
-    if (!chartData) return [];
-    return getMajorAspects(chartData.planets, 3);
-  }, [chartData]);
-
   const allPlanets = useMemo(() => {
     if (!chartData) return [];
     return chartData.planets.filter(p => MAIN_PLANETS.includes(p.planet));
   }, [chartData]);
 
-  const handlePlanetTap = useCallback((planet: Planet) => {
-    if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setFocusedPlanet(prev => prev === planet ? null : planet);
-  }, []);
+  const aspects = useMemo(() => {
+    if (!chartData) return [];
+    return getMajorAspects(chartData.planets, 3);
+  }, [chartData]);
+
+  const planetaryHour = useMemo(() => calculatePlanetaryHours(date, location), [date, location]);
+
+  // Reticle alignment detection
+  const aligned = useMemo(() => {
+    const cardinal = isCardinalAligned(heading);
+    const planet = isPlanetAligned(heading, planets);
+    return cardinal || planet;
+  }, [heading, planets]);
+
+  // Animate reticle glow
+  useEffect(() => {
+    Animated.timing(reticleGlow, {
+      toValue: aligned ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+    if (aligned && Platform.OS !== ('web' as string)) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, [aligned]);
+
+  const reticleColor = reticleGlow.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(212,175,55,0.35)', 'rgba(0,255,255,0.9)'],
+  });
 
   const handlePlanetInfo = useCallback((planet: string) => {
     if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setInfoPlanet(planet);
   }, []);
 
-  const altitudeRings = [
-    { scale: 1.0, label: 'Horizon 0°' },
-    { scale: 0.75, label: '30°' },
-    { scale: 0.5, label: '60°' },
-    { scale: 0.25, label: 'Zenith 90°' },
-  ];
-
   // ==========================================
-  // RADAR SVG VIEW
+  // ROTATING COMPASS RING (SVG)
   // ==========================================
-  const renderRadarView = useCallback(() => {
-    const directions = [
-      { label: 'N', angle: 0 }, { label: 'E', angle: 90 },
-      { label: 'S', angle: 180 }, { label: 'W', angle: 270 },
-    ];
-
-    const rawPositions: ResolvedPosition[] = [];
-    for (const planet of planets) {
-      try {
-        const relativeAz = ((safeNum(planet.azimuth, 0) - heading + 360) % 360);
-        const rad = (relativeAz * Math.PI) / 180;
-        const altFactor = Math.max(0.1, 1 - Math.abs(safeNum(planet.altitude, 20)) / 90);
-        const dist = RADAR_RADIUS * altFactor;
-        const px = safeNum(RADAR_CENTER + dist * Math.sin(rad), RADAR_CENTER);
-        const py = safeNum(RADAR_CENTER - dist * Math.cos(rad), RADAR_CENTER);
-        rawPositions.push({
-          planet, px, py, labelX: px, labelY: py - 20,
-          color: PLANET_COLORS[planet.planet] || '#E0E0E0',
-        });
-      } catch {}
-    }
-
-    const positions = resolveCollisions(rawPositions, 32);
+  const renderCompassRing = useCallback(() => {
+    // The ring rotates so that North on the ring faces True North
+    // Negative heading rotation = ring turns opposite to user facing direction
+    const rotation = -heading;
 
     return (
-      <View style={styles.radarContainer}>
-        <Svg width={RADAR_SIZE} height={RADAR_SIZE} viewBox={`0 0 ${RADAR_SIZE} ${RADAR_SIZE}`}>
-          {altitudeRings.map(({ scale, label }) => (
-            <G key={label}>
-              <Circle cx={RADAR_CENTER} cy={RADAR_CENTER} r={RADAR_RADIUS * scale}
-                stroke="#1A1A1A" strokeWidth={scale === 1.0 ? 1.5 : 0.8} fill="none" />
-              <SvgText x={RADAR_CENTER + RADAR_RADIUS * scale * 0.71}
-                y={RADAR_CENTER - RADAR_RADIUS * scale * 0.71} fill="#333" fontSize={7} textAnchor="start">
-                {label}
-              </SvgText>
-            </G>
-          ))}
+      <View style={styles.ringContainer}>
+        <Svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}>
+          <Defs>
+            <RadialGradient id="ringBg" cx="50%" cy="50%" r="50%">
+              <Stop offset="0%" stopColor="#0A0A0A" stopOpacity="0.95" />
+              <Stop offset="70%" stopColor="#050505" stopOpacity="0.98" />
+              <Stop offset="100%" stopColor="#000000" stopOpacity="1" />
+            </RadialGradient>
+          </Defs>
 
-          {directions.map((dir) => {
-            const rad = ((dir.angle - heading) * Math.PI) / 180;
-            const x2 = RADAR_CENTER + RADAR_RADIUS * Math.sin(rad);
-            const y2 = RADAR_CENTER - RADAR_RADIUS * Math.cos(rad);
-            const labelDist = RADAR_RADIUS + 15;
-            const labelX = RADAR_CENTER + labelDist * Math.sin(rad);
-            const labelY = RADAR_CENTER - labelDist * Math.cos(rad);
-            return (
-              <G key={dir.label}>
-                <Line x1={RADAR_CENTER} y1={RADAR_CENTER} x2={x2} y2={y2}
-                  stroke={dir.label === 'N' ? '#D4AF3730' : '#1A1A1A'}
-                  strokeWidth={dir.label === 'N' ? 1 : 0.5} strokeDasharray="4,4" />
-                <SvgText x={labelX} y={labelY}
-                  fill={dir.label === 'N' ? '#D4AF37' : '#6B6B6B'}
-                  fontSize={12} fontWeight="bold" textAnchor="middle" alignmentBaseline="central">
-                  {dir.label}
-                </SvgText>
-              </G>
-            );
-          })}
+          {/* Background circle */}
+          <Circle cx={RING_CENTER} cy={RING_CENTER} r={RING_OUTER_R} fill="url(#ringBg)" />
 
-          <Circle cx={RADAR_CENTER} cy={RADAR_CENTER} r={3} fill="#D4AF37" opacity={0.8} />
-          <Circle cx={RADAR_CENTER} cy={RADAR_CENTER} r={6} fill="none" stroke="#D4AF3740" strokeWidth={1} />
+          {/* Outer gold ring */}
+          <Circle cx={RING_CENTER} cy={RING_CENTER} r={RING_OUTER_R}
+            fill="none" stroke="#D4AF3740" strokeWidth={1.5} />
+          <Circle cx={RING_CENTER} cy={RING_CENTER} r={RING_INNER_R}
+            fill="none" stroke="#D4AF3720" strokeWidth={0.8} />
 
-          {positions.map(({ planet, px, py, labelX, labelY, color }) => {
-            const dignity = chartData?.dignities[planet.planet];
-            const isStrong = dignity && dignity.score > 0;
-            const isFocused = focusedPlanet === null || focusedPlanet === planet.planet;
-            return (
-              <G key={planet.planet} opacity={isFocused ? 1 : 0.3}>
-                <Line x1={RADAR_CENTER} y1={RADAR_CENTER} x2={px} y2={py}
-                  stroke={color + '30'} strokeWidth={0.8} strokeDasharray="2,3" />
-                {isStrong && (
-                  <>
-                    <Circle cx={px} cy={py} r={18} fill={color + '08'} />
-                    <Circle cx={px} cy={py} r={14} fill={color + '15'} />
-                  </>
-                )}
-                <Circle cx={px} cy={py} r={7} fill={color} />
-                <Circle cx={px} cy={py} r={7} fill="none" stroke={color} strokeWidth={1.5} opacity={0.4} />
-                <SvgText x={labelX} y={labelY} fill={color} fontSize={14} fontWeight="bold" textAnchor="middle">
-                  {PLANET_SYMBOLS[planet.planet]} {PLANET_NAMES[planet.planet] ?? planet.planet}
+          {/* Rotating group */}
+          <G rotation={rotation} origin={`${RING_CENTER}, ${RING_CENTER}`}>
+            {/* Runic tick marks (every 15°) */}
+            {RUNE_TICKS.map((deg) => {
+              const rad = (deg * Math.PI) / 180;
+              const isCardinal = deg % 90 === 0;
+              const isMajor = deg % 30 === 0;
+              const outerR = RING_OUTER_R - 2;
+              const innerR = isCardinal ? RING_INNER_R + 4 : isMajor ? RING_INNER_R + 12 : RING_INNER_R + 18;
+              const x1 = RING_CENTER + outerR * Math.sin(rad);
+              const y1 = RING_CENTER - outerR * Math.cos(rad);
+              const x2 = RING_CENTER + innerR * Math.sin(rad);
+              const y2 = RING_CENTER - innerR * Math.cos(rad);
+              return (
+                <Line key={deg} x1={x1} y1={y1} x2={x2} y2={y2}
+                  stroke={isCardinal ? '#D4AF37' : isMajor ? '#D4AF3760' : '#D4AF3730'}
+                  strokeWidth={isCardinal ? 2 : isMajor ? 1.2 : 0.6} />
+              );
+            })}
+
+            {/* Cardinal direction labels */}
+            {[
+              { label: 'N', deg: 0, color: '#D4AF37' },
+              { label: 'E', deg: 90, color: '#E0E0E080' },
+              { label: 'S', deg: 180, color: '#E0E0E080' },
+              { label: 'W', deg: 270, color: '#E0E0E080' },
+            ].map(({ label, deg, color }) => {
+              const rad = (deg * Math.PI) / 180;
+              const labelR = RING_INNER_R - 10;
+              const x = RING_CENTER + labelR * Math.sin(rad);
+              const y = RING_CENTER - labelR * Math.cos(rad);
+              return (
+                <SvgText key={label} x={x} y={y}
+                  fill={color} fontSize={label === 'N' ? 18 : 14}
+                  fontWeight="bold" textAnchor="middle" alignmentBaseline="central">
+                  {label}
                 </SvgText>
-                <SvgText x={labelX} y={labelY + 22} fill="#6B6B6B" fontSize={8} textAnchor="middle">
-                  Az {safeNum(planet.azimuth, 0).toFixed(0)}° Alt {safeNum(planet.altitude, 0).toFixed(0)}°
+              );
+            })}
+
+            {/* Zodiac glyphs on the ring band */}
+            {ZODIAC_RING.map(({ sign, deg }) => {
+              const rad = (deg * Math.PI) / 180;
+              const glyphR = (RING_OUTER_R + RING_INNER_R) / 2;
+              const x = RING_CENTER + glyphR * Math.sin(rad);
+              const y = RING_CENTER - glyphR * Math.cos(rad);
+              return (
+                <SvgText key={sign} x={x} y={y}
+                  fill="#D4AF3750" fontSize={11}
+                  textAnchor="middle" alignmentBaseline="central">
+                  {sign}
                 </SvgText>
-                <Rect x={px - 24} y={py - 24} width={48} height={48} fill="transparent"
-                  onPress={() => handlePlanetTap(planet.planet)} />
-              </G>
-            );
-          })}
+              );
+            })}
+
+            {/* Planet dots on the ring */}
+            {planets.map((p) => {
+              const az = safeNum(p.azimuth, 0);
+              const rad = (az * Math.PI) / 180;
+              const altFactor = Math.max(0.15, 1 - Math.abs(safeNum(p.altitude, 20)) / 90);
+              const dist = RING_INNER_R * 0.75 * altFactor;
+              const px = RING_CENTER + dist * Math.sin(rad);
+              const py = RING_CENTER - dist * Math.cos(rad);
+              const color = PLANET_COLORS[p.planet] || '#E0E0E0';
+              const dignity = chartData?.dignities[p.planet];
+              const isStrong = dignity && dignity.score > 0;
+
+              return (
+                <G key={p.planet}>
+                  {/* Connection line */}
+                  <Line x1={RING_CENTER} y1={RING_CENTER} x2={px} y2={py}
+                    stroke={color + '18'} strokeWidth={0.6} strokeDasharray="2,4" />
+                  {/* Glow for strong planets */}
+                  {isStrong && (
+                    <>
+                      <Circle cx={px} cy={py} r={16} fill={color + '08'} />
+                      <Circle cx={px} cy={py} r={12} fill={color + '12'} />
+                    </>
+                  )}
+                  {/* Planet dot */}
+                  <Circle cx={px} cy={py} r={6} fill={color} />
+                  <Circle cx={px} cy={py} r={6} fill="none" stroke={color} strokeWidth={1} opacity={0.5} />
+                  {/* Label */}
+                  <SvgText x={px} y={py - 12} fill={color} fontSize={11}
+                    fontWeight="bold" textAnchor="middle">
+                    {PLANET_SYMBOLS[p.planet]}
+                  </SvgText>
+                  <SvgText x={px} y={py + 16} fill="#6B6B6B" fontSize={7} textAnchor="middle">
+                    {PLANET_NAMES[p.planet]}
+                  </SvgText>
+                  {/* Tap target */}
+                  <Rect x={px - 20} y={py - 20} width={40} height={40} fill="transparent"
+                    onPress={() => handlePlanetInfo(p.planet)} />
+                </G>
+              );
+            })}
+          </G>
+
+          {/* Fixed center reticle (does NOT rotate) */}
+          <Circle cx={RING_CENTER} cy={RING_CENTER} r={3} fill="#D4AF37" opacity={0.9} />
+          <Circle cx={RING_CENTER} cy={RING_CENTER} r={8} fill="none" stroke="#D4AF3760" strokeWidth={0.8} />
+
+          {/* Fixed North indicator triangle at top */}
+          <Path
+            d={`M${RING_CENTER - 6},12 L${RING_CENTER},2 L${RING_CENTER + 6},12 Z`}
+            fill="#D4AF37" opacity={0.9}
+          />
         </Svg>
       </View>
     );
-  }, [heading, planets, chartData, focusedPlanet]);
+  }, [heading, planets, chartData]);
 
   // ==========================================
-  // AR VIEW
+  // RETICLE CROSSHAIR OVERLAY
   // ==========================================
-  const renderARView = useCallback(() => {
-    const viewCenterAlt = pitch;
-    const AR_HEIGHT = 280;
-    const ALT_RANGE = 60;
-
+  const renderReticle = useCallback(() => {
     return (
-      <View style={styles.arContainer}>
-        <View style={[styles.arBackground, { height: AR_HEIGHT }]}>
-          {(() => {
-            const horizonY = AR_HEIGHT / 2 + (viewCenterAlt / ALT_RANGE) * (AR_HEIGHT / 2);
-            if (horizonY >= 0 && horizonY <= AR_HEIGHT) {
-              return (
-                <View style={[styles.arHorizon, { top: horizonY }]}>
-                  <Text style={styles.arHorizonLabel}>— Horizon —</Text>
-                </View>
-              );
-            }
-            return null;
-          })()}
-
-          <View style={styles.pitchIndicator}>
-            <Text style={styles.pitchText}>
-              Tilt: {pitch.toFixed(0)}° | View Alt: {viewCenterAlt.toFixed(0)}°
-            </Text>
-          </View>
-
-          {planets.map((planet) => {
-            try {
-              const az = safeNum(planet.azimuth, 0);
-              const alt = safeNum(planet.altitude, 0);
-              let relAz = az - heading;
-              if (relAz > 180) relAz -= 360;
-              if (relAz < -180) relAz += 360;
-              if (Math.abs(relAz) > 60) return null;
-              const altDiff = alt - viewCenterAlt;
-              if (Math.abs(altDiff) > ALT_RANGE / 2) return null;
-              const screenX = safeNum((SCREEN_WIDTH / 2) + (relAz / 60) * (SCREEN_WIDTH / 2), SCREEN_WIDTH / 2);
-              const screenY = safeNum((AR_HEIGHT / 2) - (altDiff / (ALT_RANGE / 2)) * (AR_HEIGHT / 2), AR_HEIGHT / 2);
-              const color = PLANET_COLORS[planet.planet] || '#E0E0E0';
-              const isFocused = focusedPlanet === null || focusedPlanet === planet.planet;
-
-              return (
-                <Pressable key={planet.planet}
-                  onPress={() => handlePlanetTap(planet.planet)}
-                  style={[styles.arPlanet, { left: screenX - 30, top: screenY - 20, opacity: isFocused ? 1 : 0.3 }]}>
-                  <Text style={[styles.arSymbol, { color }]}>{PLANET_SYMBOLS[planet.planet]}</Text>
-                  <Text style={[styles.arName, { color }]}>{PLANET_NAMES[planet.planet] ?? planet.planet}</Text>
-                  <Text style={styles.arDegree}>{az.toFixed(0)}° / {alt >= 0 ? '+' : ''}{alt.toFixed(0)}°</Text>
-                </Pressable>
-              );
-            } catch { return null; }
-          })}
-
-          <View style={[styles.crosshairH, { zIndex: 1 }]} />
-          <View style={[styles.crosshairV, { zIndex: 1 }]} />
-        </View>
+      <View style={styles.reticleContainer} pointerEvents="none">
+        {/* Horizontal line */}
+        <Animated.View style={[styles.reticleH, { backgroundColor: reticleColor }]} />
+        {/* Vertical line */}
+        <Animated.View style={[styles.reticleV, { backgroundColor: reticleColor }]} />
+        {/* Center diamond */}
+        <Animated.View style={[styles.reticleDiamond, {
+          borderColor: reticleColor,
+        }]} />
+        {/* Corner brackets */}
+        <Animated.View style={[styles.bracketTL, { borderColor: reticleColor }]} />
+        <Animated.View style={[styles.bracketTR, { borderColor: reticleColor }]} />
+        <Animated.View style={[styles.bracketBL, { borderColor: reticleColor }]} />
+        <Animated.View style={[styles.bracketBR, { borderColor: reticleColor }]} />
       </View>
     );
-  }, [heading, pitch, planets, chartData, focusedPlanet]);
+  }, [reticleColor]);
 
   // ==========================================
   // PLANET CARD (from chart.tsx)
@@ -429,26 +461,33 @@ export default function RadarScreen() {
     const hasAnyTag = activeDignities.length > 0 || activeConditions.length > 0;
 
     return (
-      <View key={item.planet} style={styles.detailCard}>
-        <View style={styles.detailHeader}>
-          <Text style={[styles.planetSymbol, { color }]}>{PLANET_SYMBOLS[item.planet]}</Text>
-          <View style={styles.headerInfo}>
-            <Text style={styles.planetName}>{item.planet}</Text>
-            <Text style={styles.positionText}>
+      <View key={item.planet} style={styles.planetCard}>
+        {/* Compact row: Icon | Name + Degree | Score */}
+        <View style={styles.cardRow}>
+          <Pressable onPress={() => handlePlanetInfo(item.planet)}
+            style={({ pressed }) => [styles.cardIconWrap, pressed && { opacity: 0.6 }]}>
+            <Text style={[styles.cardIcon, { color }]}>{PLANET_SYMBOLS[item.planet]}</Text>
+          </Pressable>
+          <View style={styles.cardInfo}>
+            <Text style={styles.cardName}>{item.planet}</Text>
+            <Text style={styles.cardDegree}>
               {ZODIAC_SYMBOLS[item.sign]} {item.sign} {item.signDegree}°{item.signMinute.toString().padStart(2, '0')}'
             </Text>
           </View>
-          <Text style={[styles.scoreText, dignity.score > 0 ? styles.scorePositive : dignity.score < 0 ? styles.scoreNegative : styles.scoreNeutral]}>
+          <Text style={[styles.cardScore,
+            dignity.score > 0 ? styles.scorePos : dignity.score < 0 ? styles.scoreNeg : styles.scoreNeu]}>
             {dignity.score > 0 ? '+' : ''}{dignity.score}
           </Text>
         </View>
 
-        <View style={[styles.verdictBox, { borderLeftColor: verdict.color }]}>
+        {/* Verdict */}
+        <View style={[styles.verdictBar, { borderLeftColor: verdict.color }]}>
           <Text style={[styles.verdictText, { color: verdict.color }]}>{verdict.text}</Text>
         </View>
 
+        {/* Tags */}
         {hasAnyTag && (
-          <View style={styles.tagGrid}>
+          <View style={styles.tagRow}>
             {activeDignities.map(({ label, positive }) => (
               <Pressable key={label}
                 onPress={() => {
@@ -458,7 +497,7 @@ export default function RadarScreen() {
                 style={({ pressed }) => [styles.tag,
                   { borderColor: positive ? '#22C55E40' : '#EF444440', backgroundColor: positive ? '#22C55E10' : '#EF444410' },
                   pressed && { opacity: 0.6 }]}>
-                <Text style={[styles.tagText, { color: positive ? '#22C55E' : '#EF4444' }]}>{label} ⓘ</Text>
+                <Text style={[styles.tagLabel, { color: positive ? '#22C55E' : '#EF4444' }]}>{label} ⓘ</Text>
               </Pressable>
             ))}
             {activeConditions.map(({ label, icon, positive }) => {
@@ -472,21 +511,22 @@ export default function RadarScreen() {
                   style={({ pressed }) => [styles.tag,
                     { borderColor: condColor + '40', backgroundColor: condColor + '10' },
                     pressed && { opacity: 0.6 }]}>
-                  <Text style={[styles.tagText, { color: condColor }]}>{icon} {label} ⓘ</Text>
+                  <Text style={[styles.tagLabel, { color: condColor }]}>{icon} {label} ⓘ</Text>
                 </Pressable>
               );
             })}
           </View>
         )}
 
+        {/* Tech row */}
         <View style={styles.techRow}>
           <View style={styles.techItem}>
             <Text style={styles.techLabel}>Longitude</Text>
-            <Text style={styles.techValue}>{item.longitude.toFixed(4)}°</Text>
+            <Text style={styles.techVal}>{item.longitude.toFixed(4)}°</Text>
           </View>
           <View style={styles.techItem}>
             <Text style={styles.techLabel}>Speed</Text>
-            <Text style={[styles.techValue, item.speed < 0 && { color: '#F59E0B' }]}>
+            <Text style={[styles.techVal, item.speed < 0 && { color: '#F59E0B' }]}>
               {item.speed >= 0 ? '+' : ''}{item.speed.toFixed(4)}°/d
             </Text>
           </View>
@@ -498,27 +538,40 @@ export default function RadarScreen() {
   // ==========================================
   // MAIN RENDER
   // ==========================================
+  const hourPlanet = planetaryHour.currentHour.planet;
+  const hourColor = PLANET_COLORS[hourPlanet] || '#D4AF37';
+
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Astral Radar</Text>
-          <Text style={styles.headingText}>
-            {heading.toFixed(0)}° {getCardinalDirection(heading)}
-          </Text>
-        </View>
 
-        {/* View Mode Toggle */}
-        <View style={styles.toggleRow}>
-          <Pressable onPress={() => setViewMode('radar')}
-            style={({ pressed }) => [styles.toggleBtn, viewMode === 'radar' && styles.toggleActive, pressed && { opacity: 0.7 }]}>
-            <Text style={[styles.toggleText, viewMode === 'radar' && styles.toggleTextActive]}>Radar</Text>
-          </Pressable>
-          <Pressable onPress={() => setViewMode('ar')}
-            style={({ pressed }) => [styles.toggleBtn, viewMode === 'ar' && styles.toggleActive, pressed && { opacity: 0.7 }]}>
-            <Text style={[styles.toggleText, viewMode === 'ar' && styles.toggleTextActive]}>AR View</Text>
-          </Pressable>
+        {/* ===== TOP HUD BAR (Glassmorphism) ===== */}
+        <View style={styles.hudContainer}>
+          <BlurView intensity={20} tint="dark" style={styles.hudBlur}
+            experimentalBlurMethod="dimezisBlurView">
+            <View style={styles.hudInner}>
+              <View style={styles.hudLeft}>
+                <Text style={styles.hudAzimuth}>
+                  {heading.toFixed(0)}°
+                </Text>
+                <Text style={styles.hudDirection}>
+                  {getCardinalDirection(heading)}
+                </Text>
+              </View>
+              <View style={styles.hudDivider} />
+              <View style={styles.hudRight}>
+                <Text style={styles.hudHourLabel}>Planetary Hour</Text>
+                <View style={styles.hudHourRow}>
+                  <Text style={[styles.hudHourSymbol, { color: hourColor }]}>
+                    {PLANET_SYMBOLS[hourPlanet]}
+                  </Text>
+                  <Text style={[styles.hudHourName, { color: hourColor }]}>
+                    {hourPlanet}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </BlurView>
         </View>
 
         {!sensorAvailable && (
@@ -527,202 +580,202 @@ export default function RadarScreen() {
           </View>
         )}
 
-        {focusedPlanet && (
-          <Pressable onPress={() => setFocusedPlanet(null)}
-            style={({ pressed }) => [styles.focusBadge, pressed && { opacity: 0.7 }]}>
-            <Text style={[styles.focusText, { color: PLANET_COLORS[focusedPlanet] }]}>
-              {PLANET_SYMBOLS[focusedPlanet]} {focusedPlanet} focused
-            </Text>
-            <Text style={styles.focusDismiss}>Tap to clear</Text>
-          </Pressable>
-        )}
+        {/* ===== AR VIEWFINDER + COMPASS RING ===== */}
+        <View style={styles.viewfinderContainer}>
+          {/* Dark "camera" background */}
+          <View style={styles.viewfinderBg}>
+            {/* Compass Ring */}
+            {renderCompassRing()}
 
-        {/* Top Layer: Radar or AR */}
-        {viewMode === 'radar' ? renderRadarView() : renderARView()}
+            {/* Reticle overlay */}
+            {renderReticle()}
 
-        {/* Planet Legend */}
-        <View style={styles.legend}>
-          {planets.map((p) => {
-            const isFocused = focusedPlanet === null || focusedPlanet === p.planet;
-            return (
-              <View key={p.planet} style={[styles.legendItem, { opacity: isFocused ? 1 : 0.4 }]}>
-                <Pressable onPress={() => handlePlanetTap(p.planet)} style={styles.legendPressable}>
-                  <View style={[styles.legendDot, { backgroundColor: PLANET_COLORS[p.planet] }]} />
-                  <Text style={styles.legendText}>{PLANET_SYMBOLS[p.planet]}</Text>
-                  <Text style={styles.legendName}>{PLANET_NAMES[p.planet]}</Text>
-                </Pressable>
-                <Pressable onPress={() => handlePlanetInfo(p.planet)}
-                  style={({ pressed }) => [styles.infoBtn, pressed && { opacity: 0.5 }]}>
-                  <Text style={styles.infoBtnText}>i</Text>
-                </Pressable>
+            {/* Alignment indicator */}
+            {aligned && (
+              <View style={styles.alignedBadge}>
+                <Text style={styles.alignedText}>ALIGNED</Text>
               </View>
-            );
-          })}
+            )}
+          </View>
         </View>
 
-        {/* ===== BOTTOM SHEET: Astrolabe (PlanetCards + Aspectarian) ===== */}
-        <View style={styles.sheetContainer}>
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>Astrolabe</Text>
-          <Text style={styles.sheetSubtitle}>Essential Dignities & Conditions</Text>
+        {/* ===== BOTTOM SHEET (Glassmorphism) ===== */}
+        <View style={styles.sheetOuter}>
+          <BlurView intensity={20} tint="dark" style={styles.sheetBlur}
+            experimentalBlurMethod="dimezisBlurView">
+            <View style={styles.sheetInner}>
+              <View style={styles.sheetHandle} />
+              <Text style={styles.sheetTitle}>Astrolabe</Text>
+              <Text style={styles.sheetSubtitle}>Essential Dignities & Conditions</Text>
 
-          {chartData && (
-            <>
-              <View style={styles.sheetMeta}>
-                <Text style={styles.metaText}>JD {chartData.julianDay.toFixed(4)}</Text>
-                <Text style={styles.metaText}>LST {chartData.localSiderealTime.toFixed(4)}h</Text>
-              </View>
-
-              {/* Aspectarian */}
-              <View style={styles.aspectarianSection}>
-                <Pressable
-                  onPress={() => {
-                    if (!isFeatureUnlocked('aspectarian')) { setShowPaywall(true); return; }
-                    setShowAspectarian(!showAspectarian);
-                  }}
-                  style={({ pressed }) => [styles.aspectarianHeader, pressed && { opacity: 0.8 }]}>
-                  <View style={styles.aspectarianTitleRow}>
-                    <Text style={styles.aspectarianTitle}>Aspectarian</Text>
-                    {!isFeatureUnlocked('aspectarian') && <ProBadge onPress={() => setShowPaywall(true)} />}
+              {chartData && (
+                <>
+                  <View style={styles.sheetMeta}>
+                    <Text style={styles.metaText}>JD {chartData.julianDay.toFixed(4)}</Text>
+                    <Text style={styles.metaText}>LST {chartData.localSiderealTime.toFixed(4)}h</Text>
                   </View>
-                  <Text style={styles.aspectarianToggle}>
-                    {showAspectarian ? '▼' : '▶'} {aspects.length} aspects
-                  </Text>
-                </Pressable>
 
-                {showAspectarian && isFeatureUnlocked('aspectarian') && (
-                  <View style={styles.aspectarianBody}>
-                    {aspects.length === 0 ? (
-                      <Text style={styles.noAspects}>No major aspects within 3° orb</Text>
-                    ) : (
-                      aspects.map((asp, i) => {
-                        const aspColor = getAspectColor(asp.type);
-                        return (
-                          <Pressable key={i}
-                            onPress={() => {
-                              if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              setSelectedAspect(asp);
-                            }}
-                            style={({ pressed }) => [styles.aspectRow, asp.isExact && styles.aspectRowExact, pressed && { backgroundColor: '#1A1A1A' }]}>
-                            <View style={styles.aspectPlanets}>
-                              <Text style={[styles.aspectPlanetSymbol, { color: PLANET_COLORS[asp.planet1] }]}>{PLANET_SYMBOLS[asp.planet1]}</Text>
-                              <Text style={[styles.aspectSymbolText, { color: aspColor }]}>{asp.symbol}</Text>
-                              <Text style={[styles.aspectPlanetSymbol, { color: PLANET_COLORS[asp.planet2] }]}>{PLANET_SYMBOLS[asp.planet2]}</Text>
-                            </View>
-                            <View style={styles.aspectDetail}>
-                              <Text style={[styles.aspectTypeName, { color: aspColor }]}>{asp.type}</Text>
-                              <Text style={styles.aspectPairName}>{asp.planet1} – {asp.planet2}</Text>
-                            </View>
-                            <View style={styles.aspectOrbCol}>
-                              <Text style={[styles.aspectOrbValue, asp.isExact && { color: '#D4AF37' }]}>{asp.orb.toFixed(1)}°</Text>
-                              {asp.isExact && <Text style={styles.exactLabel}>EXACT</Text>}
-                            </View>
-                          </Pressable>
-                        );
-                      })
+                  {/* Aspectarian */}
+                  <View style={styles.aspectSection}>
+                    <Pressable
+                      onPress={() => {
+                        if (!isFeatureUnlocked('aspectarian')) { setShowPaywall(true); return; }
+                        setShowAspectarian(!showAspectarian);
+                      }}
+                      style={({ pressed }) => [styles.aspectHeader, pressed && { opacity: 0.8 }]}>
+                      <View style={styles.aspectTitleRow}>
+                        <Text style={styles.aspectTitle}>Aspectarian</Text>
+                        {!isFeatureUnlocked('aspectarian') && <ProBadge onPress={() => setShowPaywall(true)} />}
+                      </View>
+                      <Text style={styles.aspectToggle}>
+                        {showAspectarian ? '▼' : '▶'} {aspects.length} aspects
+                      </Text>
+                    </Pressable>
+
+                    {showAspectarian && isFeatureUnlocked('aspectarian') && (
+                      <View style={styles.aspectBody}>
+                        {aspects.length === 0 ? (
+                          <Text style={styles.noAspects}>No major aspects within 3° orb</Text>
+                        ) : (
+                          aspects.map((asp, i) => {
+                            const aspColor = getAspectColor(asp.type);
+                            return (
+                              <Pressable key={i}
+                                onPress={() => {
+                                  if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                  setSelectedAspect(asp);
+                                }}
+                                style={({ pressed }) => [styles.aspectRow, asp.isExact && styles.aspectRowExact, pressed && { backgroundColor: '#1A1A1A' }]}>
+                                <View style={styles.aspectPlanets}>
+                                  <Text style={[styles.aspectPSymbol, { color: PLANET_COLORS[asp.planet1] }]}>{PLANET_SYMBOLS[asp.planet1]}</Text>
+                                  <Text style={[styles.aspectSymbol, { color: aspColor }]}>{asp.symbol}</Text>
+                                  <Text style={[styles.aspectPSymbol, { color: PLANET_COLORS[asp.planet2] }]}>{PLANET_SYMBOLS[asp.planet2]}</Text>
+                                </View>
+                                <View style={styles.aspectDetail}>
+                                  <Text style={[styles.aspectType, { color: aspColor }]}>{asp.type}</Text>
+                                  <Text style={styles.aspectPair}>{asp.planet1} – {asp.planet2}</Text>
+                                </View>
+                                <View style={styles.aspectOrbCol}>
+                                  <Text style={[styles.aspectOrb, asp.isExact && { color: '#D4AF37' }]}>{asp.orb.toFixed(1)}°</Text>
+                                  {asp.isExact && <Text style={styles.exactLabel}>EXACT</Text>}
+                                </View>
+                              </Pressable>
+                            );
+                          })
+                        )}
+                      </View>
                     )}
                   </View>
-                )}
-              </View>
 
-              {/* Planet Cards */}
-              <Text style={styles.sheetSectionTitle}>Planetary Positions</Text>
-              {allPlanets.map(p => renderPlanetCard(p))}
-            </>
-          )}
+                  {/* Planet Cards */}
+                  <Text style={styles.sectionTitle}>Planetary Positions</Text>
+                  {allPlanets.map(p => renderPlanetCard(p))}
+                </>
+              )}
+            </View>
+          </BlurView>
         </View>
       </ScrollView>
 
       {/* ===== Planet Info Modal ===== */}
       <Modal visible={!!infoPlanet} transparent animationType="fade" onRequestClose={() => setInfoPlanet(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setInfoPlanet(null)}>
-          <View style={styles.modalContent}>
-            {infoPlanet && PLANET_INFO[infoPlanet] && (
-              <>
-                <Text style={[styles.modalSymbol, { color: PLANET_COLORS[infoPlanet as Planet] }]}>
-                  {PLANET_SYMBOLS[infoPlanet as Planet]}
-                </Text>
-                <Text style={styles.modalTitle}>{infoPlanet}</Text>
-                <View style={styles.modalRow}>
-                  <View style={styles.modalTag}>
-                    <Text style={styles.modalTagLabel}>Element</Text>
-                    <Text style={styles.modalTagValue}>{PLANET_INFO[infoPlanet].element}</Text>
+          <BlurView intensity={40} tint="dark" style={styles.modalBlurWrap}
+            experimentalBlurMethod="dimezisBlurView">
+            <View style={styles.modalContent}>
+              {infoPlanet && PLANET_INFO[infoPlanet] && (
+                <>
+                  <Text style={[styles.modalSymbol, { color: PLANET_COLORS[infoPlanet as Planet] }]}>
+                    {PLANET_SYMBOLS[infoPlanet as Planet]}
+                  </Text>
+                  <Text style={styles.modalTitle}>{infoPlanet}</Text>
+                  <View style={styles.modalRow}>
+                    <View style={styles.modalTag}>
+                      <Text style={styles.modalTagLabel}>Element</Text>
+                      <Text style={styles.modalTagValue}>{PLANET_INFO[infoPlanet].element}</Text>
+                    </View>
+                    <View style={styles.modalTag}>
+                      <Text style={styles.modalTagLabel}>Principle</Text>
+                      <Text style={styles.modalTagValue}>{PLANET_INFO[infoPlanet].principle}</Text>
+                    </View>
                   </View>
-                  <View style={styles.modalTag}>
-                    <Text style={styles.modalTagLabel}>Principle</Text>
-                    <Text style={styles.modalTagValue}>{PLANET_INFO[infoPlanet].principle}</Text>
-                  </View>
-                </View>
-                <Text style={styles.modalDesc}>{PLANET_INFO[infoPlanet].description}</Text>
-                <Pressable onPress={() => setInfoPlanet(null)}
-                  style={({ pressed }) => [styles.modalClose, pressed && { opacity: 0.7 }]}>
-                  <Text style={styles.modalCloseText}>Close</Text>
-                </Pressable>
-              </>
-            )}
-          </View>
+                  <Text style={styles.modalDesc}>{PLANET_INFO[infoPlanet].description}</Text>
+                  <Pressable onPress={() => setInfoPlanet(null)}
+                    style={({ pressed }) => [styles.modalClose, pressed && { opacity: 0.7 }]}>
+                    <Text style={styles.modalCloseText}>Close</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          </BlurView>
         </Pressable>
       </Modal>
 
       {/* ===== Aspect Explanation Modal ===== */}
       <Modal visible={!!selectedAspect} transparent animationType="fade" onRequestClose={() => setSelectedAspect(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setSelectedAspect(null)}>
-          <View style={styles.modalContent}>
-            {selectedAspect && (() => {
-              const aspColor = getAspectColor(selectedAspect.type);
-              const explanation = ASPECT_EXPLANATIONS[selectedAspect.type];
-              return (
-                <>
-                  <Text style={[styles.modalSymbol, { color: aspColor }]}>{selectedAspect.symbol}</Text>
-                  <Text style={[styles.modalTitle, { color: aspColor }]}>{selectedAspect.type}</Text>
-                  <View style={styles.modalPlanetsRow}>
-                    <Text style={[styles.modalPlanet, { color: PLANET_COLORS[selectedAspect.planet1] }]}>
-                      {PLANET_SYMBOLS[selectedAspect.planet1]} {selectedAspect.planet1}
+          <BlurView intensity={40} tint="dark" style={styles.modalBlurWrap}
+            experimentalBlurMethod="dimezisBlurView">
+            <View style={styles.modalContent}>
+              {selectedAspect && (() => {
+                const aspColor = getAspectColor(selectedAspect.type);
+                const explanation = ASPECT_EXPLANATIONS[selectedAspect.type];
+                return (
+                  <>
+                    <Text style={[styles.modalSymbol, { color: aspColor }]}>{selectedAspect.symbol}</Text>
+                    <Text style={[styles.modalTitle, { color: aspColor }]}>{selectedAspect.type}</Text>
+                    <View style={styles.modalPlanetsRow}>
+                      <Text style={[styles.modalPlanet, { color: PLANET_COLORS[selectedAspect.planet1] }]}>
+                        {PLANET_SYMBOLS[selectedAspect.planet1]} {selectedAspect.planet1}
+                      </Text>
+                      <Text style={[styles.modalAspectMid, { color: aspColor }]}>{selectedAspect.symbol}</Text>
+                      <Text style={[styles.modalPlanet, { color: PLANET_COLORS[selectedAspect.planet2] }]}>
+                        {PLANET_SYMBOLS[selectedAspect.planet2]} {selectedAspect.planet2}
+                      </Text>
+                    </View>
+                    <Text style={styles.modalOrbText}>
+                      Orb: {selectedAspect.orb.toFixed(2)}° {selectedAspect.isExact ? '(EXACT)' : ''}
                     </Text>
-                    <Text style={[styles.modalAspectMid, { color: aspColor }]}>{selectedAspect.symbol}</Text>
-                    <Text style={[styles.modalPlanet, { color: PLANET_COLORS[selectedAspect.planet2] }]}>
-                      {PLANET_SYMBOLS[selectedAspect.planet2]} {selectedAspect.planet2}
-                    </Text>
-                  </View>
-                  <Text style={styles.modalOrbText}>
-                    Orb: {selectedAspect.orb.toFixed(2)}° {selectedAspect.isExact ? '(EXACT)' : ''}
-                  </Text>
-                  {explanation && (
-                    <>
-                      <View style={styles.modalDivider} />
-                      <Text style={styles.modalMeaning}>{explanation.meaning}</Text>
-                      <Text style={styles.modalKeywords}>{explanation.keywords}</Text>
-                    </>
-                  )}
-                  <Pressable onPress={() => setSelectedAspect(null)}
-                    style={({ pressed }) => [styles.modalClose, pressed && { opacity: 0.7 }]}>
-                    <Text style={styles.modalCloseText}>Close</Text>
-                  </Pressable>
-                </>
-              );
-            })()}
-          </View>
+                    {explanation && (
+                      <>
+                        <View style={styles.modalDivider} />
+                        <Text style={styles.modalMeaning}>{explanation.meaning}</Text>
+                        <Text style={styles.modalKeywords}>{explanation.keywords}</Text>
+                      </>
+                    )}
+                    <Pressable onPress={() => setSelectedAspect(null)}
+                      style={({ pressed }) => [styles.modalClose, pressed && { opacity: 0.7 }]}>
+                      <Text style={styles.modalCloseText}>Close</Text>
+                    </Pressable>
+                  </>
+                );
+              })()}
+            </View>
+          </BlurView>
         </Pressable>
       </Modal>
 
       {/* ===== Dignity Explanation Modal ===== */}
       <Modal visible={!!selectedDignity} transparent animationType="fade" onRequestClose={() => setSelectedDignity(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setSelectedDignity(null)}>
-          <View style={styles.modalContent}>
-            {selectedDignity && (
-              <>
-                <Text style={styles.modalTitle}>{selectedDignity}</Text>
-                <View style={styles.modalDivider} />
-                <Text style={styles.modalDesc}>
-                  {DIGNITY_EXPLANATIONS[selectedDignity] ?? 'No explanation available.'}
-                </Text>
-                <Pressable onPress={() => setSelectedDignity(null)}
-                  style={({ pressed }) => [styles.modalClose, pressed && { opacity: 0.7 }]}>
-                  <Text style={styles.modalCloseText}>Close</Text>
-                </Pressable>
-              </>
-            )}
-          </View>
+          <BlurView intensity={40} tint="dark" style={styles.modalBlurWrap}
+            experimentalBlurMethod="dimezisBlurView">
+            <View style={styles.modalContent}>
+              {selectedDignity && (
+                <>
+                  <Text style={styles.modalTitle}>{selectedDignity}</Text>
+                  <View style={styles.modalDivider} />
+                  <Text style={styles.modalDesc}>
+                    {DIGNITY_EXPLANATIONS[selectedDignity] ?? 'No explanation available.'}
+                  </Text>
+                  <Pressable onPress={() => setSelectedDignity(null)}
+                    style={({ pressed }) => [styles.modalClose, pressed && { opacity: 0.7 }]}>
+                    <Text style={styles.modalCloseText}>Close</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          </BlurView>
         </Pressable>
       </Modal>
 
@@ -731,106 +784,150 @@ export default function RadarScreen() {
   );
 }
 
+// ============================================================
+// STYLES
+// ============================================================
 const styles = StyleSheet.create({
-  scrollContent: { paddingBottom: 100 },
-  header: { alignItems: 'center', paddingTop: 8, paddingHorizontal: 16 },
-  title: { fontFamily: 'Cinzel', fontSize: 20, color: '#D4AF37', letterSpacing: 3 },
-  headingText: { fontFamily: 'JetBrainsMono', fontSize: 32, color: '#E0E0E0', marginTop: 4 },
+  scrollContent: { paddingBottom: 120 },
 
-  toggleRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 12 },
-  toggleBtn: {
-    paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20,
-    borderWidth: 1, borderColor: '#1A1A1A', backgroundColor: '#0D0D0D',
+  // ===== HUD Top Bar =====
+  hudContainer: {
+    marginHorizontal: 16, marginTop: 8,
+    borderRadius: 16, overflow: 'hidden',
+    borderWidth: 1, borderColor: '#D4AF3730',
   },
-  toggleActive: { borderColor: '#D4AF37', backgroundColor: '#D4AF3710' },
-  toggleText: { fontSize: 13, color: '#6B6B6B', fontWeight: '600' },
-  toggleTextActive: { color: '#D4AF37' },
+  hudBlur: { borderRadius: 16, overflow: 'hidden' },
+  hudInner: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 14,
+    backgroundColor: '#0A0A0A80',
+  },
+  hudLeft: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  hudAzimuth: {
+    fontFamily: 'JetBrainsMono', fontSize: 32, color: '#E0E0E0', fontWeight: '700',
+  },
+  hudDirection: {
+    fontFamily: 'Cinzel', fontSize: 16, color: '#D4AF37', fontWeight: '600', letterSpacing: 2,
+  },
+  hudDivider: {
+    width: 1, height: 36, backgroundColor: '#D4AF3730', marginHorizontal: 16,
+  },
+  hudRight: { flex: 1 },
+  hudHourLabel: {
+    fontFamily: 'JetBrainsMono', fontSize: 9, color: '#6B6B6B',
+    letterSpacing: 1, textTransform: 'uppercase',
+  },
+  hudHourRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  hudHourSymbol: { fontSize: 20 },
+  hudHourName: { fontSize: 16, fontWeight: '700' },
 
+  // ===== Warning =====
   warningBox: {
     backgroundColor: '#F59E0B15', borderWidth: 1, borderColor: '#F59E0B30',
     borderRadius: 8, padding: 10, marginTop: 8, marginHorizontal: 16,
   },
   warningText: { fontSize: 11, color: '#F59E0B', textAlign: 'center' },
 
-  focusBadge: {
-    alignSelf: 'center', marginTop: 8, paddingHorizontal: 16, paddingVertical: 6,
-    borderRadius: 20, borderWidth: 1, borderColor: '#1A1A1A', backgroundColor: '#0D0D0D',
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+  // ===== Viewfinder =====
+  viewfinderContainer: {
+    alignItems: 'center', marginTop: 16, marginHorizontal: 16,
   },
-  focusText: { fontSize: 13, fontWeight: '600' },
-  focusDismiss: { fontSize: 10, color: '#6B6B6B' },
-
-  radarContainer: { alignItems: 'center', marginTop: 12 },
-
-  // AR View
-  arContainer: { marginTop: 12, paddingHorizontal: 16 },
-  arBackground: {
-    backgroundColor: '#080808', borderRadius: 12, borderWidth: 1,
-    borderColor: '#1A1A1A', overflow: 'hidden', position: 'relative',
-  },
-  arHorizon: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 2 },
-  arHorizonLabel: {
-    fontFamily: 'JetBrainsMono', fontSize: 9, color: '#6B6B6B40',
-    letterSpacing: 2, borderTopWidth: 1, borderTopColor: '#1A1A1A', paddingTop: 2, paddingHorizontal: 8,
-  },
-  pitchIndicator: { position: 'absolute', top: 8, left: 8, right: 8, zIndex: 20, alignItems: 'center' },
-  pitchText: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B' },
-  arPlanet: { position: 'absolute', alignItems: 'center', width: 60, zIndex: 10 },
-  arSymbol: { fontSize: 22, textAlign: 'center' },
-  arName: { fontSize: 9, fontWeight: '600', textAlign: 'center' },
-  arDegree: { fontFamily: 'JetBrainsMono', fontSize: 8, color: '#6B6B6B', textAlign: 'center' },
-  crosshairH: {
-    position: 'absolute', top: '50%', left: '45%', right: '45%',
-    height: 1, backgroundColor: '#D4AF3740',
-  },
-  crosshairV: {
-    position: 'absolute', left: '50%', top: '45%', bottom: '45%',
-    width: 1, backgroundColor: '#D4AF3740',
+  viewfinderBg: {
+    width: RING_SIZE + 16, height: RING_SIZE + 16,
+    backgroundColor: '#050505', borderRadius: 20,
+    borderWidth: 1, borderColor: '#D4AF3720',
+    alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden', position: 'relative',
   },
 
-  // Legend
-  legend: {
-    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center',
-    gap: 8, paddingVertical: 12, paddingHorizontal: 16,
-  },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  legendPressable: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  legendDot: { width: 6, height: 6, borderRadius: 3 },
-  legendText: { fontSize: 14, color: '#E0E0E0' },
-  legendName: { fontSize: 10, color: '#6B6B6B' },
-  infoBtn: {
-    width: 16, height: 16, borderRadius: 8, borderWidth: 1,
-    borderColor: '#6B6B6B40', alignItems: 'center', justifyContent: 'center',
-  },
-  infoBtnText: { fontSize: 9, color: '#6B6B6B', fontWeight: '700', fontStyle: 'italic' },
+  // ===== Compass Ring =====
+  ringContainer: { alignItems: 'center', justifyContent: 'center' },
 
-  // Bottom Sheet (Glassmorphism)
-  sheetContainer: {
-    marginTop: 16, marginHorizontal: 16,
-    backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: '#1A1A1A',
-    borderRadius: 20, padding: 16, paddingTop: 12,
+  // ===== Reticle =====
+  reticleContainer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  reticleH: {
+    position: 'absolute', height: 1,
+    left: '30%', right: '30%',
+  },
+  reticleV: {
+    position: 'absolute', width: 1,
+    top: '30%', bottom: '30%',
+  },
+  reticleDiamond: {
+    position: 'absolute', width: 12, height: 12,
+    borderWidth: 1, borderRadius: 2,
+    transform: [{ rotate: '45deg' }],
+  },
+  bracketTL: {
+    position: 'absolute', top: '25%', left: '25%',
+    width: 16, height: 16, borderTopWidth: 1, borderLeftWidth: 1,
+  },
+  bracketTR: {
+    position: 'absolute', top: '25%', right: '25%',
+    width: 16, height: 16, borderTopWidth: 1, borderRightWidth: 1,
+  },
+  bracketBL: {
+    position: 'absolute', bottom: '25%', left: '25%',
+    width: 16, height: 16, borderBottomWidth: 1, borderLeftWidth: 1,
+  },
+  bracketBR: {
+    position: 'absolute', bottom: '25%', right: '25%',
+    width: 16, height: 16, borderBottomWidth: 1, borderRightWidth: 1,
+  },
+
+  // ===== Aligned Badge =====
+  alignedBadge: {
+    position: 'absolute', top: 12, alignSelf: 'center',
+    paddingHorizontal: 12, paddingVertical: 4,
+    backgroundColor: '#00FFFF15', borderWidth: 1, borderColor: '#00FFFF60',
+    borderRadius: 12,
+  },
+  alignedText: {
+    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#00FFFF',
+    letterSpacing: 2, fontWeight: '700',
+  },
+
+  // ===== Bottom Sheet =====
+  sheetOuter: {
+    marginTop: 20, marginHorizontal: 16,
+    borderRadius: 20, overflow: 'hidden',
+    borderWidth: 1, borderColor: '#D4AF3730',
+  },
+  sheetBlur: { borderRadius: 20, overflow: 'hidden' },
+  sheetInner: {
+    padding: 16, paddingTop: 12,
+    backgroundColor: '#0A0A0A80',
   },
   sheetHandle: {
-    width: 40, height: 4, borderRadius: 2, backgroundColor: '#333',
+    width: 40, height: 4, borderRadius: 2, backgroundColor: '#D4AF3740',
     alignSelf: 'center', marginBottom: 12,
   },
-  sheetTitle: { fontFamily: 'Cinzel', fontSize: 18, color: '#D4AF37', textAlign: 'center', letterSpacing: 2 },
+  sheetTitle: {
+    fontFamily: 'Cinzel', fontSize: 18, color: '#D4AF37',
+    textAlign: 'center', letterSpacing: 2,
+  },
   sheetSubtitle: { fontSize: 11, color: '#6B6B6B', textAlign: 'center', marginTop: 2 },
   sheetMeta: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 8 },
   metaText: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B' },
-  sheetSectionTitle: { fontFamily: 'Cinzel', fontSize: 14, color: '#E0E0E0', marginTop: 16, marginBottom: 8, letterSpacing: 2 },
+  sectionTitle: {
+    fontFamily: 'Cinzel', fontSize: 14, color: '#E0E0E0',
+    marginTop: 16, marginBottom: 8, letterSpacing: 2,
+  },
 
-  // Aspectarian
-  aspectarianSection: { marginTop: 12 },
-  aspectarianHeader: {
-    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
+  // ===== Aspectarian =====
+  aspectSection: { marginTop: 12 },
+  aspectHeader: {
+    backgroundColor: '#0D0D0D80', borderWidth: 1, borderColor: '#1A1A1A',
     borderRadius: 12, padding: 14,
   },
-  aspectarianTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  aspectarianTitle: { fontFamily: 'Cinzel', fontSize: 16, color: '#E0E0E0', letterSpacing: 2 },
-  aspectarianToggle: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 4 },
-  aspectarianBody: {
-    backgroundColor: '#080808', borderWidth: 1, borderColor: '#1A1A1A',
+  aspectTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  aspectTitle: { fontFamily: 'Cinzel', fontSize: 16, color: '#E0E0E0', letterSpacing: 2 },
+  aspectToggle: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 4 },
+  aspectBody: {
+    backgroundColor: '#08080880', borderWidth: 1, borderColor: '#1A1A1A',
     borderTopWidth: 0, borderBottomLeftRadius: 12, borderBottomRightRadius: 12, padding: 8,
   },
   noAspects: { fontSize: 12, color: '#6B6B6B', textAlign: 'center', padding: 16 },
@@ -840,53 +937,62 @@ const styles = StyleSheet.create({
   },
   aspectRowExact: { backgroundColor: '#D4AF3708', borderWidth: 1, borderColor: '#D4AF3720' },
   aspectPlanets: { flexDirection: 'row', alignItems: 'center', gap: 4, width: 70 },
-  aspectPlanetSymbol: { fontSize: 16 },
-  aspectSymbolText: { fontSize: 14 },
+  aspectPSymbol: { fontSize: 16 },
+  aspectSymbol: { fontSize: 14 },
   aspectDetail: { flex: 1, marginLeft: 8 },
-  aspectTypeName: { fontSize: 12, fontWeight: '700' },
-  aspectPairName: { fontSize: 10, color: '#6B6B6B', marginTop: 1 },
+  aspectType: { fontSize: 12, fontWeight: '700' },
+  aspectPair: { fontSize: 10, color: '#6B6B6B', marginTop: 1 },
   aspectOrbCol: { alignItems: 'flex-end' },
-  aspectOrbValue: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#E0E0E0' },
+  aspectOrb: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#E0E0E0' },
   exactLabel: { fontFamily: 'JetBrainsMono', fontSize: 8, color: '#D4AF37', letterSpacing: 1, marginTop: 1 },
 
-  // Planet Cards
-  detailCard: {
-    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
+  // ===== Planet Cards =====
+  planetCard: {
+    backgroundColor: '#0D0D0D80', borderWidth: 1, borderColor: '#1A1A1A',
     borderRadius: 12, padding: 14, marginBottom: 8,
   },
-  detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  planetSymbol: { fontSize: 28, width: 36, textAlign: 'center' },
-  headerInfo: { flex: 1 },
-  planetName: { fontSize: 16, fontWeight: '600', color: '#E0E0E0' },
-  positionText: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', marginTop: 2 },
-  scoreText: { fontFamily: 'JetBrainsMono', fontSize: 18, fontWeight: '700' },
-  scorePositive: { color: '#22C55E' },
-  scoreNegative: { color: '#EF4444' },
-  scoreNeutral: { color: '#6B6B6B' },
-  verdictBox: { marginTop: 10, paddingLeft: 10, borderLeftWidth: 3 },
+  cardRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  cardIconWrap: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  cardIcon: { fontSize: 28 },
+  cardInfo: { flex: 1 },
+  cardName: { fontSize: 16, fontWeight: '600', color: '#E0E0E0' },
+  cardDegree: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', marginTop: 2 },
+  cardScore: { fontFamily: 'JetBrainsMono', fontSize: 18, fontWeight: '700' },
+  scorePos: { color: '#22C55E' },
+  scoreNeg: { color: '#EF4444' },
+  scoreNeu: { color: '#6B6B6B' },
+  verdictBar: { marginTop: 10, paddingLeft: 10, borderLeftWidth: 3 },
   verdictText: { fontSize: 12, fontStyle: 'italic', lineHeight: 18 },
-  tagGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   tag: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  tagText: { fontSize: 10, fontWeight: '700' },
-  techRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#1A1A1A' },
+  tagLabel: { fontSize: 10, fontWeight: '700' },
+  techRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 10,
+    paddingTop: 8, borderTopWidth: 1, borderTopColor: '#1A1A1A',
+  },
   techItem: {},
   techLabel: { fontSize: 9, color: '#6B6B6B' },
-  techValue: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#E0E0E0' },
+  techVal: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#E0E0E0' },
 
-  // Modals
+  // ===== Modals =====
   modalOverlay: {
-    flex: 1, backgroundColor: '#00000090', justifyContent: 'center',
-    alignItems: 'center', padding: 32,
+    flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32,
+  },
+  modalBlurWrap: {
+    width: '100%', maxWidth: 340, borderRadius: 16, overflow: 'hidden',
+    borderWidth: 1, borderColor: '#D4AF3730',
   },
   modalContent: {
-    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
-    borderRadius: 16, padding: 24, width: '100%', maxWidth: 340, alignItems: 'center',
+    backgroundColor: '#0D0D0D90', padding: 24, alignItems: 'center',
   },
   modalSymbol: { fontSize: 40 },
-  modalTitle: { fontFamily: 'Cinzel', fontSize: 20, color: '#E0E0E0', marginTop: 8, letterSpacing: 2 },
+  modalTitle: {
+    fontFamily: 'Cinzel', fontSize: 20, color: '#E0E0E0',
+    marginTop: 8, letterSpacing: 2,
+  },
   modalRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
   modalTag: {
-    flex: 1, backgroundColor: '#080808', borderWidth: 1, borderColor: '#1A1A1A',
+    flex: 1, backgroundColor: '#08080880', borderWidth: 1, borderColor: '#1A1A1A',
     borderRadius: 8, padding: 10, alignItems: 'center',
   },
   modalTagLabel: { fontFamily: 'JetBrainsMono', fontSize: 9, color: '#6B6B6B', letterSpacing: 1 },
@@ -894,7 +1000,7 @@ const styles = StyleSheet.create({
   modalDesc: { fontSize: 13, color: '#E0E0E0', lineHeight: 20, marginTop: 16, textAlign: 'center' },
   modalClose: {
     marginTop: 20, paddingHorizontal: 24, paddingVertical: 10,
-    borderRadius: 20, borderWidth: 1, borderColor: '#1A1A1A',
+    borderRadius: 20, borderWidth: 1, borderColor: '#D4AF3730',
   },
   modalCloseText: { fontSize: 13, color: '#6B6B6B' },
   modalDivider: { width: '100%', height: 1, backgroundColor: '#1A1A1A', marginVertical: 16 },
