@@ -312,3 +312,22 @@
 
 - [x] Fix East/West mirror: compass shows East when pointing West and vice versa – negate magX in atan2
 - [x] Reduce smoothing factor from 0.95→0.20 to make compass more responsive (less laggy)
+
+## Ascension Hub & Gamification
+
+### Ascension Hub (adept.tsx)
+- [x] Section 1 – The Mirror: Avatar, Magic Name, Level Circle header
+- [x] Soul Radar: Pentagonal radar chart (Fire, Water, Air, Earth, Spirit)
+- [x] Consistency: 30-day heatmap grid (GitHub style)
+- [x] Section 2 – The Veil: Locked feature teaser card with blurred icon + lock overlay
+- [x] Section 3 – The Firmament: Vertical ladder with Secret Chiefs (top 3) and Rivalry Slice
+- [x] Firmament animation: User card slides into rank position on load
+
+### Stasis Timer (components/stasis/timer.tsx)
+- [x] Circular Phase Ring: Silver (0-5m), Blue (5-15m, buff active), Gold (15m+, XP boost)
+- [x] On exit: call trpc.user.refreshLeaderboard() immediately
+
+### Onboarding Wizard (components/onboarding/wizard.tsx)
+- [x] Step 1: magic_name + birth date input
+- [x] Step 2: Forging signature rune
+- [x] Step 3: Save and complete
