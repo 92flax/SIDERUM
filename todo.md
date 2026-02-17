@@ -307,3 +307,8 @@
 - [x] Add planet legend below compass with all planet names and colored dots
 - [x] Click on legend planet = only that planet visible on radar, others disappear
 - [x] Click again to deselect and show all planets
+
+## Compass Fix v3
+
+- [x] Fix East/West mirror: compass shows East when pointing West and vice versa – negate magX in atan2
+- [x] Reduce smoothing factor from 0.95→0.20 to make compass more responsive (less laggy)

@@ -1,6 +1,6 @@
 // ============================================================
 // ÆONIS – Sensor Fusion for Ritual Compass
-// Correct heading formula, robust low-pass filter
+// Correct heading formula with East/West fix, responsive filter
 // ============================================================
 
 import { Platform } from 'react-native';
@@ -21,7 +21,10 @@ export interface SensorSubscriptions {
 
 // ===== Low-Pass Filter State =====
 let _prevHeading: number | null = null;
-const SMOOTHING_FACTOR = 0.05; // 95% previous + 5% current
+
+// Smoothing factor: higher = more responsive, lower = smoother
+// 0.05 was too sluggish; 0.20 gives good balance of smooth + responsive
+const SMOOTHING_FACTOR = 0.20;
 
 /**
  * Reset the low-pass filter (call when re-subscribing sensors).
@@ -33,24 +36,29 @@ export function resetHeadingFilter(): void {
 /**
  * Calculate compass heading from magnetometer data.
  *
- * The standard formula for compass heading from magnetometer:
- *   heading = atan2(magX, magY)
- * This gives the angle in degrees where 0° = North (positive Y),
- * increasing clockwise (East = 90°, South = 180°, West = 270°).
+ * Expo Magnetometer on iOS/Android:
+ *   - Y-axis points toward top of device
+ *   - X-axis points to the right of device
  *
- * On iOS/Android, the magnetometer Y-axis points toward the top of the device
- * and X-axis points to the right. When the device faces North:
- *   magY is max positive, magX is ~0 → atan2(0, +) = 0° ✓
- * When facing East:
- *   magX is max positive, magY is ~0 → atan2(+, 0) = 90° ✓
+ * For a compass heading (0°=North, 90°=East, 180°=South, 270°=West):
+ *   heading = atan2(-magX, magY)
+ *
+ * The negation of magX is required because:
+ *   - When device faces East, magY≈0 and magX is positive (field from right)
+ *   - atan2(magX, magY) = atan2(+, 0) = 90° → correct
+ *   - BUT on many devices the X-axis is inverted relative to geographic East
+ *   - Negating magX corrects the East/West mirror
+ *
+ * If the compass still points wrong after this fix, the device may need
+ * the opposite sign. The key insight: if East↔West are swapped, flip magX sign.
  */
 export function calculateHeading(magX: number, magY: number): number {
-  // atan2(magX, magY) gives clockwise angle from North
-  let rawHeading = Math.atan2(magX, magY) * (180 / Math.PI);
+  // Negate magX to fix East/West mirror on iOS/Android
+  let rawHeading = Math.atan2(-magX, magY) * (180 / Math.PI);
   // Normalize to 0-360
   rawHeading = ((rawHeading % 360) + 360) % 360;
 
-  // Low-pass filter for stabilization: smoothed = prev*0.95 + curr*0.05
+  // Low-pass filter for stabilization
   if (_prevHeading === null) {
     _prevHeading = rawHeading;
     return rawHeading;
