@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+// ============================================================
+// ÆONIS – Dashboard (Digital Grimoire)
+// XP Bar Header, Magic Name, Stasis Buff, Power Rating
+// ============================================================
+
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Text, View, ScrollView, StyleSheet, Platform, Pressable, Dimensions, TextInput, Modal } from 'react-native';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
@@ -7,18 +12,23 @@ import { ScreenContainer } from '@/components/screen-container';
 import { PaywallModal, ProBadge } from '@/components/paywall-modal';
 import { useAstroStore } from '@/lib/astro/store';
 import { useProStore } from '@/lib/store/pro-store';
-import { calculatePlanetaryHours, calculateMoonPhase, PlanetaryHour } from '@/lib/astro/planetary-hours';
-import { getRulerRecommendation, getRulerOfDay, DAY_RULERS } from '@/lib/astro/ruler-of-day';
+import { calculatePlanetaryHours, calculateMoonPhase } from '@/lib/astro/planetary-hours';
+import { getRulerRecommendation, getRulerOfDay } from '@/lib/astro/ruler-of-day';
 import { calculateEventHorizon, getNextMajorEvent, searchEvents, AstroEvent } from '@/lib/astro/events';
-import { getExactAspects, Aspect } from '@/lib/astro/aspects';
+import { getExactAspects } from '@/lib/astro/aspects';
 import { PLANET_SYMBOLS, PLANET_COLORS, ZODIAC_SYMBOLS, Planet } from '@/lib/astro/types';
 import { calculatePowerRating, getPowerLabel } from '@/lib/astro/power-rating';
 import { useNatalStore } from '@/lib/store/natal-store';
 import { useRuneWalletStore } from '@/lib/store/rune-wallet';
+import {
+  loadLocalAnalytics, LocalAnalytics, LEVEL_TITLES,
+  xpForNextLevel, xpForCurrentLevel,
+} from '@/lib/ritual/completion-handler';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const MAGIC_NAME_KEY = '@aeonis_magic_name';
 
-// Planet correspondences for Deep Dive overlay
 const PLANET_CORRESPONDENCES: Record<string, { element: string; metal: string; color: string; keywords: string }> = {
   Sun: { element: 'Fire', metal: 'Gold', color: '#D4AF37', keywords: 'Vitality, Authority, Success' },
   Moon: { element: 'Water', metal: 'Silver', color: '#C0C0C0', keywords: 'Intuition, Dreams, Emotions' },
@@ -54,6 +64,27 @@ export default function HomeScreen() {
   const [tooltipText, setTooltipText] = useState<string | null>(null);
   const [selectedAspectExplain, setSelectedAspectExplain] = useState<string | null>(null);
 
+  // Digital Grimoire state
+  const [analytics, setAnalytics] = useState<LocalAnalytics | null>(null);
+  const [magicName, setMagicName] = useState<string>('');
+  const [stasisBuffActive, setStasisBuffActive] = useState(false);
+
+  // Load analytics and magic name
+  useEffect(() => {
+    loadLocalAnalytics().then(setAnalytics);
+    AsyncStorage.getItem(MAGIC_NAME_KEY).then(name => {
+      if (name) setMagicName(name);
+    });
+  }, []);
+
+  // Check stasis buff
+  useEffect(() => {
+    if (analytics?.lastStasisTimestamp) {
+      const minutesSince = (Date.now() - analytics.lastStasisTimestamp) / 60000;
+      setStasisBuffActive(minutesSince <= 60);
+    }
+  }, [analytics]);
+
   // GPS location on mount
   useEffect(() => {
     (async () => {
@@ -66,14 +97,12 @@ export default function HomeScreen() {
             return;
           }
         }
-      } catch (e) {
-        // Fallback
-      }
+      } catch {}
       recalculate();
     })();
   }, []);
 
-  // Auto-refresh every 30 seconds for real-time data
+  // Auto-refresh every 30 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       setDate(new Date());
@@ -82,26 +111,11 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Calculate planetary hour and moon phase (real-time)
-  const planetaryHour = useMemo(() => {
-    return calculatePlanetaryHours(date, location);
-  }, [date, location]);
+  const planetaryHour = useMemo(() => calculatePlanetaryHours(date, location), [date, location]);
+  const moonPhase = useMemo(() => calculateMoonPhase(date), [date]);
+  const rulerOfDay = useMemo(() => getRulerRecommendation(date), [date]);
+  const dayRulerFull = useMemo(() => getRulerOfDay(date), [date]);
 
-  const moonPhase = useMemo(() => {
-    return calculateMoonPhase(date);
-  }, [date]);
-
-  // Ruler of the Day
-  const rulerOfDay = useMemo(() => {
-    return getRulerRecommendation(date);
-  }, [date]);
-
-  // Full day ruler data for Deep Dive
-  const dayRulerFull = useMemo(() => {
-    return getRulerOfDay(date);
-  }, [date]);
-
-  // Countdown to next planetary hour
   const hourCountdown = useMemo(() => {
     const endMs = planetaryHour.currentHour.endTime.getTime();
     const remaining = Math.max(0, endMs - now);
@@ -110,7 +124,6 @@ export default function HomeScreen() {
     return { mins, secs, remaining };
   }, [planetaryHour, now]);
 
-  // Event Horizon - next major event
   const eventHorizon = useMemo(() => {
     try {
       const events = calculateEventHorizon(date, location, 2);
@@ -121,19 +134,16 @@ export default function HomeScreen() {
     }
   }, [date, location]);
 
-  // Filtered events for search
   const filteredEvents = useMemo(() => {
     if (!eventSearch.trim()) return eventHorizon.events.slice(0, 10);
     return searchEvents(eventHorizon.events, eventSearch).slice(0, 20);
   }, [eventHorizon.events, eventSearch]);
 
-  // Exact aspects for dashboard highlight
   const exactAspects = useMemo(() => {
     if (!chartData) return [];
     return getExactAspects(chartData.planets);
   }, [chartData]);
 
-  // Sky Verdict: strongest and weakest influence
   const skyVerdict = useMemo(() => {
     if (!chartData) return null;
     const classicalPlanets: Planet[] = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'];
@@ -142,39 +152,30 @@ export default function HomeScreen() {
       dignity: chartData.dignities[p],
       position: chartData.planets.find(pp => pp.planet === p)!,
     }));
-
     const sorted = [...entries].sort((a, b) => b.dignity.score - a.dignity.score);
-    return {
-      strongest: sorted[0],
-      weakest: sorted[sorted.length - 1],
-    };
+    return { strongest: sorted[0], weakest: sorted[sorted.length - 1] };
   }, [chartData]);
 
-  // Check if current planetary hour matches a ritual planet
   const isRitualHourHighlighted = useMemo(() => {
     const hp = planetaryHour.currentHour.planet;
     return hp === 'Mars' || hp === 'Saturn' || hp === 'Jupiter';
   }, [planetaryHour]);
 
-  // Magical Power Rating
+  // Power Rating with stasis buff
   const powerRating = useMemo(() => {
     if (!chartData) return null;
     const activeRune = getActiveRune();
     const runeDignity = activeRune?.dignityScore ?? 0;
     return calculatePowerRating(
-      chartData,
-      natalChart,
-      runeDignity,
-      planetaryHour.currentHour.planet,
+      chartData, natalChart, runeDignity,
+      planetaryHour.currentHour.planet, stasisBuffActive,
     );
-  }, [chartData, natalChart, activeRuneId, planetaryHour]);
+  }, [chartData, natalChart, activeRuneId, planetaryHour, stasisBuffActive]);
 
   const powerLabel = useMemo(() => {
     if (!powerRating) return { label: 'Unknown', color: '#6B6B6B' };
     return getPowerLabel(powerRating.totalScore);
   }, [powerRating]);
-
-
 
   const handleProFeature = (featureId: string) => {
     if (!isFeatureUnlocked(featureId)) {
@@ -186,11 +187,17 @@ export default function HomeScreen() {
   };
 
   const handleEventTap = useCallback((evt: AstroEvent) => {
-    if (Platform.OS !== ('web' as string)) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
+    if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSelectedEvent(evt);
   }, []);
+
+  // XP bar calculations
+  const currentLevel = analytics?.levelRank ?? 0;
+  const currentLevelXp = xpForCurrentLevel(currentLevel);
+  const nextLevelXp = xpForNextLevel(currentLevel);
+  const xpProgress = (analytics?.xpTotal ?? 0) - currentLevelXp;
+  const xpNeeded = nextLevelXp - currentLevelXp;
+  const xpPercent = xpNeeded > 0 ? Math.min(100, Math.round((xpProgress / xpNeeded) * 100)) : 100;
 
   if (isCalculating || !chartData) {
     return (
@@ -207,20 +214,45 @@ export default function HomeScreen() {
   const hourColor = PLANET_COLORS[hourPlanet];
   const sectColor = chartData.sect === 'Day' ? '#D4AF37' : '#0055A4';
   const sectLabel = chartData.sect === 'Day' ? '☉ Day Sect' : '☽ Night Sect';
-
-  // Days until next event
   const daysUntilEvent = eventHorizon.nextEvent
     ? Math.ceil((eventHorizon.nextEvent.date.getTime() - date.getTime()) / 86400000)
     : null;
-
-  // Planet correspondence for current hour
   const hourCorrespondence = PLANET_CORRESPONDENCES[hourPlanet];
 
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Title & Date */}
-        <Text style={styles.title}>ÆONIS</Text>
+        {/* ===== XP BAR HEADER ===== */}
+        <View style={styles.xpHeader}>
+          <View style={styles.xpHeaderTop}>
+            <View>
+              <Text style={styles.xpMagicName}>
+                {magicName || 'ÆONIS'}
+              </Text>
+              <Text style={styles.xpLevelTitle}>
+                {LEVEL_TITLES[currentLevel] ?? 'Neophyte'} · Lv.{currentLevel}
+              </Text>
+            </View>
+            <View style={styles.xpBadge}>
+              <Text style={styles.xpBadgeText}>
+                {(analytics?.xpTotal ?? 0).toLocaleString()} XP
+              </Text>
+            </View>
+          </View>
+          <View style={styles.xpBarTrack}>
+            <View style={[styles.xpBarFill, { width: `${xpPercent}%` }]} />
+          </View>
+          <View style={styles.xpBarLabels}>
+            <Text style={styles.xpBarLabel}>{xpProgress}/{xpNeeded}</Text>
+            {stasisBuffActive && (
+              <View style={styles.stasisBuff}>
+                <Text style={styles.stasisBuffText}>STASIS ×1.15</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Date & Sect */}
         <Text style={styles.subtitle}>
           {date.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
           {'  '}
@@ -243,13 +275,7 @@ export default function HomeScreen() {
             <View style={styles.powerGaugeRow}>
               <View style={styles.powerGaugeTrack}>
                 <View
-                  style={[
-                    styles.powerGaugeFill,
-                    {
-                      width: `${powerRating.totalScore}%`,
-                      backgroundColor: powerLabel.color,
-                    },
-                  ]}
+                  style={[styles.powerGaugeFill, { width: `${powerRating.totalScore}%`, backgroundColor: powerLabel.color }]}
                 />
               </View>
               <Text style={[styles.powerPercent, { color: powerLabel.color }]}>
@@ -269,13 +295,11 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ===== Event Horizon Warning Widget ===== */}
+        {/* ===== Event Horizon Warning ===== */}
         {eventHorizon.nextEvent && daysUntilEvent !== null && daysUntilEvent <= 30 && (
           <Pressable
             onPress={() => {
-              if (handleProFeature('event_horizon')) {
-                handleEventTap(eventHorizon.nextEvent!);
-              }
+              if (handleProFeature('event_horizon')) handleEventTap(eventHorizon.nextEvent!);
             }}
             style={({ pressed }) => [styles.eventWarning, pressed && { opacity: 0.8 }]}
           >
@@ -291,14 +315,12 @@ export default function HomeScreen() {
 
         {/* Hero Card: Planetary Hour + Moon Phase */}
         <View style={styles.heroRow}>
-          {/* Planetary Hour Card – with countdown */}
           <Pressable
             onPress={() => {
               if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             }}
             style={({ pressed }) => [
-              styles.heroCard,
-              { borderColor: hourColor + '40' },
+              styles.heroCard, { borderColor: hourColor + '40' },
               isRitualHourHighlighted && { borderColor: hourColor, borderWidth: 2 },
               pressed && { opacity: 0.9 },
             ]}
@@ -309,17 +331,10 @@ export default function HomeScreen() {
               </View>
             )}
             <Text style={styles.heroLabel}>Planetary Hour</Text>
-            <Text style={[styles.heroSymbol, { color: hourColor }]}>
-              {PLANET_SYMBOLS[hourPlanet]}
-            </Text>
+            <Text style={[styles.heroSymbol, { color: hourColor }]}>{PLANET_SYMBOLS[hourPlanet]}</Text>
             <Text style={[styles.heroTitle, { color: hourColor }]}>{hourPlanet}</Text>
-            <Text style={styles.heroMeta}>
-              Hour {planetaryHour.currentHour.hourNumber} of 24
-            </Text>
-            <Text style={styles.heroMeta}>
-              {planetaryHour.currentHour.isDayHour ? 'Day' : 'Night'} Hour
-            </Text>
-            {/* Countdown */}
+            <Text style={styles.heroMeta}>Hour {planetaryHour.currentHour.hourNumber} of 24</Text>
+            <Text style={styles.heroMeta}>{planetaryHour.currentHour.isDayHour ? 'Day' : 'Night'} Hour</Text>
             <View style={styles.countdownBox}>
               <Text style={[styles.countdownText, { color: hourColor }]}>
                 {hourCountdown.mins}:{hourCountdown.secs.toString().padStart(2, '0')}
@@ -328,14 +343,11 @@ export default function HomeScreen() {
             </View>
           </Pressable>
 
-          {/* Moon Phase Card */}
           <View style={[styles.heroCard, { borderColor: '#C0C0C040' }]}>
             <Text style={styles.heroLabel}>Moon Phase</Text>
             <Text style={styles.moonEmoji}>{moonPhase.emoji}</Text>
             <Text style={[styles.heroTitle, { color: '#C0C0C0' }]}>{moonPhase.phaseName}</Text>
-            <Text style={styles.heroMeta}>
-              {moonPhase.illumination.toFixed(0)}% illuminated
-            </Text>
+            <Text style={styles.heroMeta}>{moonPhase.illumination.toFixed(0)}% illuminated</Text>
             {chartData.planets.find(p => p.planet === 'Moon') && (
               <>
                 <Text style={styles.heroMeta}>
@@ -351,7 +363,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ===== Current Influence Card (Deep Dive) ===== */}
+        {/* Current Influence Card */}
         {hourCorrespondence && (
           <View style={[styles.influenceCard, { borderColor: hourCorrespondence.color + '30' }]}>
             <Text style={styles.influenceLabel}>CURRENT INFLUENCE</Text>
@@ -387,7 +399,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ===== Ruler of the Day ===== */}
+        {/* Ruler of the Day */}
         <View style={[styles.rulerCard, { borderColor: rulerOfDay.color + '40' }]}>
           <View style={styles.rulerHeader}>
             <Text style={[styles.rulerSymbol, { color: rulerOfDay.color }]}>{rulerOfDay.symbol}</Text>
@@ -404,7 +416,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ===== Exact Aspects Highlight ===== */}
+        {/* Exact Aspects */}
         {exactAspects.length > 0 && (
           <>
             <Text style={styles.sectionTitle}>Exact Aspects</Text>
@@ -413,14 +425,14 @@ export default function HomeScreen() {
                 key={i}
                 onPress={() => {
                   if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  const aspectExplanations: Record<string, string> = {
-                    Conjunction: `${asp.planet1} and ${asp.planet2} merge their energies. This is a powerful fusion – their combined influence amplifies both planets' qualities.`,
-                    Opposition: `${asp.planet1} and ${asp.planet2} face off across the sky. This creates tension and awareness – a push-pull dynamic requiring balance.`,
-                    Trine: `${asp.planet1} and ${asp.planet2} flow harmoniously. This is a gift aspect – their energies support each other effortlessly.`,
-                    Square: `${asp.planet1} and ${asp.planet2} clash at 90°. This creates friction and challenge – but also the drive for growth and transformation.`,
-                    Sextile: `${asp.planet1} and ${asp.planet2} cooperate gently. This is an opportunity aspect – their energies blend well with a little effort.`,
+                  const explanations: Record<string, string> = {
+                    Conjunction: `${asp.planet1} and ${asp.planet2} merge their energies into a single, intensified force.`,
+                    Opposition: `${asp.planet1} and ${asp.planet2} face off across the sky, creating tension that demands balance.`,
+                    Trine: `${asp.planet1} and ${asp.planet2} flow harmoniously — a gift aspect of natural ease.`,
+                    Square: `${asp.planet1} and ${asp.planet2} clash at 90°, driving growth through friction.`,
+                    Sextile: `${asp.planet1} and ${asp.planet2} cooperate gently — an opportunity aspect.`,
                   };
-                  setSelectedAspectExplain(aspectExplanations[asp.type] || `${asp.type}: ${asp.planet1} and ${asp.planet2}`);
+                  setSelectedAspectExplain(explanations[asp.type] || `${asp.type}: ${asp.planet1} and ${asp.planet2}`);
                 }}
                 style={({ pressed }) => [styles.aspectHighlight, pressed && { opacity: 0.7 }]}
               >
@@ -486,9 +498,7 @@ export default function HomeScreen() {
           </>
         )}
 
-
-
-        {/* ===== Event Horizon Search (Pro) ===== */}
+        {/* Event Horizon */}
         <View style={styles.eventSection}>
           <View style={styles.eventHeader}>
             <Text style={styles.sectionTitle}>Event Horizon</Text>
@@ -547,7 +557,7 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Arabic Parts – Tappable */}
+        {/* Arabic Parts */}
         <View style={styles.partsRow}>
           {chartData.arabicParts.map((part) => (
             <Pressable
@@ -555,29 +565,22 @@ export default function HomeScreen() {
               onPress={() => {
                 if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 const explanations: Record<string, string> = {
-                  'Pars Fortunae': 'The Part of Fortune indicates where material luck and worldly success flow most naturally. It is calculated from the Ascendant, Sun, and Moon positions.',
-                  'Pars Spiritus': 'The Part of Spirit reveals your soul\'s purpose and spiritual calling. It is the inverse of the Part of Fortune, emphasizing conscious will over fate.',
+                  'Pars Fortunae': 'The Part of Fortune indicates where material luck and worldly success flow most naturally.',
+                  'Pars Spiritus': 'The Part of Spirit reveals your soul\'s purpose and spiritual calling.',
                 };
                 setTooltipText(explanations[part.name] || `${part.name} at ${part.signDegree}° ${part.sign}`);
               }}
               style={({ pressed }) => [styles.partBadge, pressed && { opacity: 0.7, borderColor: '#D4AF37' }]}
             >
               <Text style={styles.partName}>{part.name}</Text>
-              <Text style={styles.partValue}>
-                {ZODIAC_SYMBOLS[part.sign]} {part.signDegree}°
-              </Text>
+              <Text style={styles.partValue}>{ZODIAC_SYMBOLS[part.sign]} {part.signDegree}°</Text>
             </Pressable>
           ))}
         </View>
       </ScrollView>
 
-      {/* ===== Deep Dive Overlay Modal ===== */}
-      <Modal
-        visible={!!selectedEvent}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSelectedEvent(null)}
-      >
+      {/* Event Deep Dive Modal */}
+      <Modal visible={!!selectedEvent} transparent animationType="slide" onRequestClose={() => setSelectedEvent(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setSelectedEvent(null)}>
           <Pressable style={styles.modalContent} onPress={() => {}}>
             {selectedEvent && (
@@ -585,20 +588,14 @@ export default function HomeScreen() {
                 <View style={styles.modalHandle} />
                 <Text style={styles.modalTitle}>{selectedEvent.title}</Text>
                 <Text style={styles.modalDate}>
-                  {selectedEvent.date.toLocaleDateString('en-US', {
-                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                  })}
+                  {selectedEvent.date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </Text>
-
-                {/* Days countdown */}
                 <View style={styles.modalCountdown}>
                   <Text style={styles.modalCountdownNumber}>
                     {Math.max(0, Math.ceil((selectedEvent.date.getTime() - date.getTime()) / 86400000))}
                   </Text>
                   <Text style={styles.modalCountdownLabel}>days away</Text>
                 </View>
-
-                {/* Event details */}
                 <View style={styles.modalDetails}>
                   <View style={styles.modalDetailRow}>
                     <Text style={styles.modalDetailLabel}>Type</Text>
@@ -617,15 +614,6 @@ export default function HomeScreen() {
                   {selectedEvent.planet && PLANET_CORRESPONDENCES[selectedEvent.planet] && (
                     <>
                       <View style={styles.modalDetailRow}>
-                        <Text style={styles.modalDetailLabel}>Recommended Color</Text>
-                        <View style={styles.modalColorRow}>
-                          <View style={[styles.modalColorSwatch, { backgroundColor: PLANET_CORRESPONDENCES[selectedEvent.planet].color }]} />
-                          <Text style={styles.modalDetailValue}>
-                            {PLANET_CORRESPONDENCES[selectedEvent.planet].color}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.modalDetailRow}>
                         <Text style={styles.modalDetailLabel}>Element</Text>
                         <Text style={styles.modalDetailValue}>{PLANET_CORRESPONDENCES[selectedEvent.planet].element}</Text>
                       </View>
@@ -642,15 +630,6 @@ export default function HomeScreen() {
                     </View>
                   )}
                 </View>
-
-                {/* Current planetary hour context */}
-                <View style={styles.modalContext}>
-                  <Text style={styles.modalContextLabel}>CURRENT CONTEXT</Text>
-                  <Text style={styles.modalContextText}>
-                    {PLANET_SYMBOLS[hourPlanet]} Hour of {hourPlanet} · {moonPhase.phaseName} · {chartData.sect} Sect
-                  </Text>
-                </View>
-
                 <Pressable
                   onPress={() => setSelectedEvent(null)}
                   style={({ pressed }) => [styles.modalCloseBtn, pressed && { opacity: 0.8 }]}
@@ -664,12 +643,7 @@ export default function HomeScreen() {
       </Modal>
 
       {/* Tooltip Modal */}
-      <Modal
-        visible={!!tooltipText}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setTooltipText(null)}
-      >
+      <Modal visible={!!tooltipText} transparent animationType="fade" onRequestClose={() => setTooltipText(null)}>
         <Pressable style={styles.tooltipOverlay} onPress={() => setTooltipText(null)}>
           <View style={styles.tooltipBox}>
             <Text style={styles.tooltipTitle}>Explanation</Text>
@@ -685,12 +659,7 @@ export default function HomeScreen() {
       </Modal>
 
       {/* Aspect Explanation Modal */}
-      <Modal
-        visible={!!selectedAspectExplain}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedAspectExplain(null)}
-      >
+      <Modal visible={!!selectedAspectExplain} transparent animationType="fade" onRequestClose={() => setSelectedAspectExplain(null)}>
         <Pressable style={styles.tooltipOverlay} onPress={() => setSelectedAspectExplain(null)}>
           <View style={styles.tooltipBox}>
             <Text style={styles.tooltipTitle}>Aspect Energy</Text>
@@ -705,11 +674,7 @@ export default function HomeScreen() {
         </Pressable>
       </Modal>
 
-      <PaywallModal
-        visible={showPaywall}
-        onClose={() => setShowPaywall(false)}
-        featureId={paywallFeature}
-      />
+      <PaywallModal visible={showPaywall} onClose={() => setShowPaywall(false)} featureId={paywallFeature} />
     </ScreenContainer>
   );
 }
@@ -726,17 +691,56 @@ function getScoreVerdict(score: number): string {
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 },
-  title: { fontFamily: 'Cinzel', fontSize: 32, color: '#D4AF37', textAlign: 'center', letterSpacing: 6 },
+
+  // XP Header
+  xpHeader: {
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#D4AF3730',
+    borderRadius: 14, padding: 14, marginBottom: 8,
+  },
+  xpHeaderTop: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  },
+  xpMagicName: {
+    fontFamily: 'Cinzel', fontSize: 22, color: '#D4AF37', letterSpacing: 3,
+  },
+  xpLevelTitle: {
+    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', marginTop: 2, letterSpacing: 1,
+  },
+  xpBadge: {
+    backgroundColor: '#D4AF3710', borderWidth: 1, borderColor: '#D4AF3730',
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+  },
+  xpBadgeText: {
+    fontFamily: 'JetBrainsMono', fontSize: 12, color: '#D4AF37', fontWeight: '700',
+  },
+  xpBarTrack: {
+    height: 4, backgroundColor: '#1A1A1A', borderRadius: 2, marginTop: 10, overflow: 'hidden',
+  },
+  xpBarFill: {
+    height: '100%', backgroundColor: '#D4AF37', borderRadius: 2,
+  },
+  xpBarLabels: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4,
+  },
+  xpBarLabel: {
+    fontFamily: 'JetBrainsMono', fontSize: 9, color: '#4A4A4A',
+  },
+  stasisBuff: {
+    backgroundColor: '#22C55E15', borderWidth: 1, borderColor: '#22C55E30',
+    borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2,
+  },
+  stasisBuffText: {
+    fontFamily: 'JetBrainsMono', fontSize: 8, color: '#22C55E', fontWeight: '700', letterSpacing: 1,
+  },
+
   subtitle: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', textAlign: 'center', marginTop: 4 },
   sectBadge: { alignSelf: 'center', marginTop: 10, paddingHorizontal: 16, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
   sectText: { fontFamily: 'JetBrainsMono', fontSize: 12, fontWeight: '600' },
 
-  // Live indicator
   liveIndicator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' },
   liveText: { fontFamily: 'JetBrainsMono', fontSize: 9, color: '#4A4A4A', letterSpacing: 1 },
 
-  // Event Warning
   eventWarning: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#EF444410',
     borderWidth: 1, borderColor: '#EF444430', borderRadius: 12, padding: 12, marginTop: 12, gap: 10,
@@ -746,7 +750,6 @@ const styles = StyleSheet.create({
   eventWarningTitle: { fontSize: 13, fontWeight: '600', color: '#EF4444' },
   eventWarningDate: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 2 },
 
-  // Hero
   heroRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   heroCard: { flex: 1, backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 14, padding: 14, alignItems: 'center' },
   heroLabel: { fontSize: 10, color: '#6B6B6B', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 },
@@ -756,19 +759,14 @@ const styles = StyleSheet.create({
   heroMeta: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', marginTop: 2 },
   heroTime: { fontFamily: 'JetBrainsMono', fontSize: 9, color: '#4A4A4A', marginTop: 4 },
 
-  // Ritual Hour badge
   ritualHourBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, marginBottom: 4 },
   ritualHourText: { fontFamily: 'JetBrainsMono', fontSize: 8, fontWeight: '700', letterSpacing: 2 },
 
-  // Countdown
   countdownBox: { marginTop: 8, alignItems: 'center' },
   countdownText: { fontFamily: 'JetBrainsMono', fontSize: 18, fontWeight: '700' },
   countdownLabel: { fontFamily: 'JetBrainsMono', fontSize: 8, color: '#4A4A4A', marginTop: 1 },
 
-  // Current Influence Card
-  influenceCard: {
-    backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 12,
-  },
+  influenceCard: { backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 12 },
   influenceLabel: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', letterSpacing: 2, marginBottom: 10 },
   influenceRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   influenceSymbol: { fontSize: 32 },
@@ -781,10 +779,7 @@ const styles = StyleSheet.create({
   influenceDetailValue: { fontSize: 12, color: '#E0E0E0', fontWeight: '600' },
   colorSwatch: { width: 16, height: 16, borderRadius: 4 },
 
-  // Ruler of Day
-  rulerCard: {
-    backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 12,
-  },
+  rulerCard: { backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 12 },
   rulerHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   rulerSymbol: { fontSize: 28 },
   rulerInfo: { flex: 1 },
@@ -794,7 +789,6 @@ const styles = StyleSheet.create({
   rulerCorrespondences: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#1A1A1A' },
   rulerCorr: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B' },
 
-  // Exact Aspects
   aspectHighlight: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#D4AF3708',
     borderWidth: 1, borderColor: '#D4AF3720', borderRadius: 10, padding: 12, marginBottom: 6, gap: 12,
@@ -806,7 +800,6 @@ const styles = StyleSheet.create({
 
   sectionTitle: { fontFamily: 'Cinzel', fontSize: 14, color: '#E0E0E0', marginTop: 20, marginBottom: 8, letterSpacing: 2 },
 
-  // Verdict
   verdictRow: { gap: 10 },
   verdictCard: { backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 12, padding: 14 },
   verdictLabel: { fontSize: 10, color: '#6B6B6B', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 },
@@ -818,9 +811,6 @@ const styles = StyleSheet.create({
   verdictScore: { fontFamily: 'JetBrainsMono', fontSize: 22, fontWeight: '700' },
   verdictInterpretation: { fontSize: 11, color: '#6B6B6B', marginTop: 8, fontStyle: 'italic', lineHeight: 16 },
 
-
-
-  // Event Horizon
   eventSection: { marginTop: 8 },
   eventHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   searchBar: {
@@ -838,7 +828,6 @@ const styles = StyleSheet.create({
   eventTitle: { fontSize: 13, fontWeight: '600', color: '#E0E0E0' },
   eventDate: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 2 },
 
-  // Locked feature
   lockedCard: {
     backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#D4AF3720',
     borderRadius: 12, padding: 20, alignItems: 'center', gap: 8,
@@ -846,108 +835,51 @@ const styles = StyleSheet.create({
   lockedIcon: { fontSize: 28 },
   lockedText: { fontSize: 12, color: '#6B6B6B', textAlign: 'center', lineHeight: 18 },
 
-  // Arabic Parts
   partsRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 16 },
   partBadge: { backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, alignItems: 'center' },
   partName: { fontSize: 10, color: '#6B6B6B', marginBottom: 2 },
   partValue: { fontFamily: 'JetBrainsMono', fontSize: 13, color: '#E0E0E0' },
 
-  // Deep Dive Modal
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
   modalContent: {
     backgroundColor: '#0D0D0D', borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: 24, paddingBottom: 40, maxHeight: '80%',
   },
-  modalHandle: {
-    width: 40, height: 4, borderRadius: 2, backgroundColor: '#333',
-    alignSelf: 'center', marginBottom: 20,
-  },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#333', alignSelf: 'center', marginBottom: 20 },
   modalTitle: { fontFamily: 'Cinzel', fontSize: 20, color: '#D4AF37', textAlign: 'center', letterSpacing: 2 },
   modalDate: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', textAlign: 'center', marginTop: 6 },
   modalCountdown: { alignItems: 'center', marginTop: 20 },
   modalCountdownNumber: { fontFamily: 'Cinzel', fontSize: 48, color: '#D4AF37' },
   modalCountdownLabel: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 2 },
-  modalDetails: {
-    marginTop: 20, backgroundColor: '#111', borderRadius: 12, padding: 16,
-  },
+  modalDetails: { marginTop: 20, backgroundColor: '#111', borderRadius: 12, padding: 16 },
   modalDetailRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1A1A1A',
   },
   modalDetailLabel: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', letterSpacing: 1 },
   modalDetailValue: { fontSize: 13, color: '#E0E0E0', fontWeight: '600', textAlign: 'right', flex: 1, marginLeft: 12 },
-  modalColorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  modalColorSwatch: { width: 14, height: 14, borderRadius: 3 },
-  modalContext: {
-    marginTop: 16, backgroundColor: '#0A0A0A', borderRadius: 10, padding: 12,
-    borderWidth: 1, borderColor: '#1A1A1A',
-  },
-  modalContextLabel: { fontFamily: 'JetBrainsMono', fontSize: 9, color: '#4A4A4A', letterSpacing: 2, marginBottom: 6 },
-  modalContextText: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#E0E0E0' },
-  modalCloseBtn: {
-    backgroundColor: '#D4AF37', borderRadius: 20, paddingVertical: 14,
-    alignItems: 'center', marginTop: 20,
-  },
+  modalCloseBtn: { backgroundColor: '#D4AF37', borderRadius: 20, paddingVertical: 14, alignItems: 'center', marginTop: 20 },
   modalCloseBtnText: { color: '#050505', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
 
-  // Tooltip
-  tooltipOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center',
-    alignItems: 'center', padding: 32,
-  },
+  tooltipOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 32 },
   tooltipBox: {
     backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#D4AF3730',
     borderRadius: 16, padding: 24, maxWidth: 340, width: '100%',
   },
-  tooltipTitle: {
-    fontFamily: 'Cinzel', fontSize: 16, color: '#D4AF37',
-    textAlign: 'center', letterSpacing: 2, marginBottom: 12,
-  },
-  tooltipContent: {
-    fontSize: 13, color: '#E0E0E0', lineHeight: 20, textAlign: 'center',
-  },
-  tooltipClose: {
-    backgroundColor: '#D4AF37', borderRadius: 20, paddingVertical: 10,
-    alignItems: 'center', marginTop: 16,
-  },
+  tooltipTitle: { fontFamily: 'Cinzel', fontSize: 16, color: '#D4AF37', textAlign: 'center', letterSpacing: 2, marginBottom: 12 },
+  tooltipContent: { fontSize: 13, color: '#E0E0E0', lineHeight: 20, textAlign: 'center' },
+  tooltipClose: { backgroundColor: '#D4AF37', borderRadius: 20, paddingVertical: 10, alignItems: 'center', marginTop: 16 },
   tooltipCloseText: { color: '#050505', fontSize: 13, fontWeight: '700' },
 
-  // Power Rating Gauge
-  powerCard: {
-    backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 14,
-    padding: 16, marginTop: 12,
-  },
-  powerHeader: {
-    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B',
-    letterSpacing: 2, marginBottom: 10, textAlign: 'center',
-  },
-  powerGaugeRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-  },
-  powerGaugeTrack: {
-    flex: 1, height: 8, backgroundColor: '#1A1A1A', borderRadius: 4,
-    overflow: 'hidden',
-  },
-  powerGaugeFill: {
-    height: '100%', borderRadius: 4,
-  },
-  powerPercent: {
-    fontFamily: 'JetBrainsMono', fontSize: 18, fontWeight: '700',
-    width: 50, textAlign: 'right',
-  },
-  powerLabel: {
-    fontFamily: 'Cinzel', fontSize: 14, textAlign: 'center',
-    marginTop: 8, letterSpacing: 3,
-  },
-  powerDetails: {
-    marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#1A1A1A',
-    gap: 3,
-  },
-  powerDetail: {
-    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', lineHeight: 16,
-  },
+  powerCard: { backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 14, padding: 16, marginTop: 12 },
+  powerHeader: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', letterSpacing: 2, marginBottom: 10, textAlign: 'center' },
+  powerGaugeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  powerGaugeTrack: { flex: 1, height: 8, backgroundColor: '#1A1A1A', borderRadius: 4, overflow: 'hidden' },
+  powerGaugeFill: { height: '100%', borderRadius: 4 },
+  powerPercent: { fontFamily: 'JetBrainsMono', fontSize: 18, fontWeight: '700', width: 50, textAlign: 'right' },
+  powerLabel: { fontFamily: 'Cinzel', fontSize: 14, textAlign: 'center', marginTop: 8, letterSpacing: 3 },
+  powerDetails: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#1A1A1A', gap: 3 },
+  powerDetail: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', lineHeight: 16 },
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { fontSize: 16, color: '#E0E0E0' },

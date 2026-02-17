@@ -1,9 +1,15 @@
+// ============================================================
+// ÆONIS – Tab Layout (Digital Grimoire)
+// 5 Tabs: Home, Sanctum, Radar, Path, Adept
+// Uses lucide-react-native for crisp icons
+// ============================================================
+
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform } from "react-native";
 
 import { HapticTab } from "@/components/haptic-tab";
-import { IconSymbol } from "@/components/ui/icon-symbol";
-import { Platform } from "react-native";
+import { LucideIcon } from "@/components/ui/lucide-icon";
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
@@ -35,39 +41,41 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="compass"
-        options={{
-          title: "Compass",
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="location.north.fill" color={color} />,
+          tabBarIcon: ({ color }) => <LucideIcon name="home" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="sanctum"
         options={{
           title: "Sanctum",
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="book.fill" color={color} />,
+          tabBarIcon: ({ color }) => <LucideIcon name="flame" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="runes"
+        name="compass"
         options={{
-          title: "Forge",
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="pencil.and.outline" color={color} />,
+          title: "Radar",
+          tabBarIcon: ({ color }) => <LucideIcon name="compass" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="wallet"
+        name="path"
         options={{
-          title: "Wallet",
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="wallet.pass.fill" color={color} />,
+          title: "Path",
+          tabBarIcon: ({ color }) => <LucideIcon name="trophy" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="adept"
+        options={{
+          title: "Adept",
+          tabBarIcon: ({ color }) => <LucideIcon name="user" size={22} color={color} />,
         }}
       />
       {/* Hidden tabs - accessible via navigation but not in tab bar */}
       <Tabs.Screen name="chart" options={{ href: null }} />
+      <Tabs.Screen name="runes" options={{ href: null }} />
+      <Tabs.Screen name="wallet" options={{ href: null }} />
       <Tabs.Screen name="settings" options={{ href: null }} />
     </Tabs>
   );

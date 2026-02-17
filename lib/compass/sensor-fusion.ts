@@ -1,5 +1,6 @@
 // ============================================================
 // ÆONIS – Sensor Fusion for Ritual Compass
+// Low-pass filtered, 180° corrected, frame-rate aware
 // ============================================================
 
 import { Platform } from 'react-native';
@@ -18,20 +19,55 @@ export interface SensorSubscriptions {
   gyroscope: any;
 }
 
-// Calculate compass heading from magnetometer data
-// Standard formula: atan2 of magnetometer X/Y gives angle from magnetic north
-// On mobile devices held upright: +X points right, +Y points up, +Z points out of screen
-export function calculateHeading(magX: number, magY: number): number {
-  // atan2(-magX, magY) gives angle from magnetic north (Y-axis) clockwise
-  let heading = Math.atan2(-magX, magY) * (180 / Math.PI);
-  // Normalize to 0-360
-  heading = ((heading % 360) + 360) % 360;
-  return heading;
+// ===== Low-Pass Filter State =====
+let _prevHeading: number | null = null;
+const SMOOTHING_FACTOR = 0.05; // 95% previous + 5% current
+
+/**
+ * Reset the low-pass filter (call when re-subscribing sensors).
+ */
+export function resetHeadingFilter(): void {
+  _prevHeading = null;
 }
 
-// Calculate pitch and roll from accelerometer
+/**
+ * Calculate compass heading from magnetometer data with low-pass filter.
+ * Includes 180° inversion fix for correct orientation.
+ */
+export function calculateHeading(magX: number, magY: number): number {
+  // atan2(-magX, magY) gives angle from magnetic north (Y-axis) clockwise
+  let rawHeading = Math.atan2(-magX, magY) * (180 / Math.PI);
+  // Normalize to 0-360
+  rawHeading = ((rawHeading % 360) + 360) % 360;
+
+  // Apply 180° inversion fix
+  rawHeading = (rawHeading + 180) % 360;
+
+  // Low-pass filter for stabilization
+  if (_prevHeading === null) {
+    _prevHeading = rawHeading;
+    return rawHeading;
+  }
+
+  // Handle wrap-around (e.g. 359° -> 1°)
+  let diff = rawHeading - _prevHeading;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+
+  const smoothed = ((_prevHeading + diff * SMOOTHING_FACTOR) + 360) % 360;
+  _prevHeading = smoothed;
+  return smoothed;
+}
+
+/**
+ * Calculate pitch and roll from accelerometer.
+ * Respects gravity (Y-axis) for stable horizon line.
+ */
 export function calculateOrientation(accX: number, accY: number, accZ: number): { pitch: number; roll: number } {
+  // pitch: angle of device tilt forward/backward
+  // Using atan2 with gravity vector for stable calculation
   const pitch = Math.atan2(-accX, Math.sqrt(accY * accY + accZ * accZ)) * (180 / Math.PI);
+  // roll: angle of device tilt left/right, respecting gravity on Y-axis
   const roll = Math.atan2(accY, accZ) * (180 / Math.PI);
   return { pitch, roll };
 }

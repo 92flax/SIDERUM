@@ -1,17 +1,29 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { Text, View, StyleSheet, FlatList, Platform, Pressable, ScrollView, Dimensions, Alert } from 'react-native';
+// ============================================================
+// ÆONIS – Sanctum Hub (Digital Grimoire)
+// Tile-Hub layout: [Stasis], [Rituals], [Library], [Events]
+// Includes ritual player and catalog sub-views
+// ============================================================
+
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Text, View, StyleSheet, FlatList, Platform, Pressable, ScrollView, Dimensions, Alert, Modal } from 'react-native';
 import { Magnetometer, Accelerometer } from 'expo-sensors';
 import * as Haptics from 'expo-haptics';
 import { ScreenContainer } from '@/components/screen-container';
 import { HoloPad } from '@/components/holo-pad';
+import { StasisMode } from '@/components/stasis-mode';
 import { useRitualStore } from '@/lib/ritual/store';
 import { calculateHeading, isAlignedToDirection, detectTracingMotion } from '@/lib/compass/sensor-fusion';
 import { Ritual, RitualStep, RitualIntention, RitualTradition } from '@/lib/ritual/types';
 import { useAstroStore } from '@/lib/astro/store';
 import { ELDER_FUTHARK, generateBindruneData } from '@/lib/runes/futhark';
 import { useRuneWalletStore } from '@/lib/store/rune-wallet';
+import { handleRitualCompletion } from '@/lib/ritual/completion-handler';
+import { RITUAL_INSTRUCTIONS_MD } from '@/lib/content/local-fallback';
+import { useRouter } from 'expo-router';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SW, height: SH } = Dimensions.get('window');
+
+type HubView = 'hub' | 'stasis' | 'catalog' | 'library' | 'player';
 
 export default function SanctumScreen() {
   const rituals = useRitualStore((s) => s.rituals);
@@ -29,7 +41,9 @@ export default function SanctumScreen() {
   const resetRitual = useRitualStore((s) => s.resetRitual);
   const setDirectionLocked = useRitualStore((s) => s.setDirectionLocked);
   const setTracingDetected = useRitualStore((s) => s.setTracingDetected);
+  const router = useRouter();
 
+  const [hubView, setHubView] = useState<HubView>('hub');
   const [heading, setHeading] = useState(0);
   const accHistoryRef = useRef<Array<{ x: number; y: number; z: number; timestamp: number }>>([]);
   const alignedRef = useRef(false);
@@ -37,6 +51,8 @@ export default function SanctumScreen() {
   // Catalog filters
   const [filterIntention, setFilterIntention] = useState<RitualIntention | 'All'>('All');
   const [filterTradition, setFilterTradition] = useState<RitualTradition | 'All'>('All');
+  const [selectedLibraryRitual, setSelectedLibraryRitual] = useState<string | null>(null);
+  const [completionResult, setCompletionResult] = useState<{ xpAwarded: number; leveledUp: boolean } | null>(null);
   const chartData = useAstroStore((s) => s.chartData);
 
   const filteredRituals = useMemo(() => {
@@ -51,6 +67,13 @@ export default function SanctumScreen() {
   const TRADITIONS: Array<RitualTradition | 'All'> = ['All', 'Golden Dawn', 'Thelema', 'Norse', 'Hermetic'];
 
   useEffect(() => { loadRituals(); }, []);
+
+  // Auto-switch to player when ritual starts
+  useEffect(() => {
+    if (currentRitual && playerState !== 'idle' && playerState !== 'completed') {
+      setHubView('player');
+    }
+  }, [currentRitual, playerState]);
 
   // Sensor subscriptions for compass lock and tracing
   useEffect(() => {
@@ -114,14 +137,18 @@ export default function SanctumScreen() {
     prevStep();
   }, [prevStep]);
 
-  // Determine if current ritual is LBRP
-  const isLBRP = currentRitual?.id === 'lbrp' || currentRitual?.name?.toLowerCase().includes('lesser banishing');
+  const handleRitualComplete = useCallback(async () => {
+    if (!currentRitual) return;
+    try {
+      const result = await handleRitualCompletion(currentRitual.id);
+      setCompletionResult({ xpAwarded: result.xpAwarded, leveledUp: result.leveledUp });
+    } catch {}
+  }, [currentRitual]);
 
-  // Rune Wallet: Use active talisman as sigil, or fallback to protection runes
+  const isLBRP = currentRitual?.id === 'lbrp' || currentRitual?.name?.toLowerCase().includes('lesser banishing');
   const activeRune = useRuneWalletStore((s) => s.getActiveRune());
 
   const sigilData = useMemo(() => {
-    // If active talisman exists, use its runes
     if (activeRune) {
       const runeObjs = activeRune.runeNames
         .map(n => ELDER_FUTHARK.find(r => r.name === n))
@@ -130,7 +157,6 @@ export default function SanctumScreen() {
         return generateBindruneData(runeObjs as any, 200, 300);
       }
     }
-    // Fallback: protection-themed runes
     const protectionRunes = ELDER_FUTHARK.filter(r =>
       r.keywords.some(k => ['protection', 'strength', 'power'].includes(k))
     ).slice(0, 3);
@@ -138,16 +164,108 @@ export default function SanctumScreen() {
     return generateBindruneData(protectionRunes, 200, 300);
   }, [activeRune]);
 
+  const handleTilePress = useCallback((view: HubView) => {
+    if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setHubView(view);
+  }, []);
+
   // ==========================================
-  // Ritual Selection Screen with Intent Toggle
+  // STASIS MODE
   // ==========================================
-  if (!currentRitual || playerState === 'idle') {
+  if (hubView === 'stasis') {
+    return (
+      <StasisMode
+        onComplete={(result) => {
+          // Result handled by StasisMode internally
+        }}
+        onClose={() => setHubView('hub')}
+      />
+    );
+  }
+
+  // ==========================================
+  // LIBRARY VIEW
+  // ==========================================
+  if (hubView === 'library') {
     return (
       <ScreenContainer>
         <View style={styles.container}>
-          <Text style={styles.title}>Sanctum</Text>
-          <Text style={styles.subtitle}>Ritual Engine</Text>
+          <Pressable
+            onPress={() => setHubView('hub')}
+            style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.backBtnText}>‹ Sanctum</Text>
+          </Pressable>
+          <Text style={styles.title}>Library</Text>
+          <Text style={styles.subtitle}>Ritual Knowledge Base</Text>
 
+          <FlatList
+            data={rituals}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() => {
+                  if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setSelectedLibraryRitual(item.id);
+                }}
+                style={({ pressed }) => [styles.libraryCard, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={styles.libraryCardName}>{item.name}</Text>
+                <Text style={styles.libraryCardDesc}>{item.description}</Text>
+                <Text style={styles.libraryCardMeta}>{item.tradition} · {item.steps.length} steps</Text>
+              </Pressable>
+            )}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          />
+
+          {/* Library Detail Modal */}
+          <Modal visible={!!selectedLibraryRitual} transparent animationType="slide" onRequestClose={() => setSelectedLibraryRitual(null)}>
+            <Pressable style={styles.modalOverlay} onPress={() => setSelectedLibraryRitual(null)}>
+              <Pressable style={styles.modalContent} onPress={() => {}}>
+                <View style={styles.modalHandle} />
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <Text style={styles.modalTitle}>
+                    {rituals.find(r => r.id === selectedLibraryRitual)?.name ?? 'Ritual'}
+                  </Text>
+                  <Text style={styles.libraryMd}>
+                    {RITUAL_INSTRUCTIONS_MD[selectedLibraryRitual ?? ''] ?? 'No extended instructions available for this ritual.'}
+                  </Text>
+                </ScrollView>
+                <Pressable
+                  onPress={() => setSelectedLibraryRitual(null)}
+                  style={({ pressed }) => [styles.modalCloseBtn, pressed && { opacity: 0.8 }]}
+                >
+                  <Text style={styles.modalCloseBtnText}>Close</Text>
+                </Pressable>
+              </Pressable>
+            </Pressable>
+          </Modal>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  // ==========================================
+  // RITUAL CATALOG
+  // ==========================================
+  if (hubView === 'catalog') {
+    return (
+      <ScreenContainer>
+        <View style={styles.container}>
+          <Pressable
+            onPress={() => {
+              if (currentRitual) resetRitual();
+              setHubView('hub');
+            }}
+            style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.backBtnText}>‹ Sanctum</Text>
+          </Pressable>
+          <Text style={styles.title}>Rituals</Text>
+          <Text style={styles.subtitle}>Select & Perform</Text>
+
+          {/* Selected Ritual with Intent Toggle */}
           {currentRitual && playerState === 'idle' && (
             <View style={styles.selectedRitual}>
               <Text style={styles.ritualName}>{currentRitual.name}</Text>
@@ -156,7 +274,7 @@ export default function SanctumScreen() {
                 {currentRitual.tradition} · {currentRitual.steps.length} steps
               </Text>
 
-              {/* ===== INTENT TOGGLE ===== */}
+              {/* Intent Toggle */}
               <View style={styles.intentSection}>
                 <Text style={styles.intentLabel}>RITUAL INTENT</Text>
                 <View style={styles.intentToggle}>
@@ -216,10 +334,9 @@ export default function SanctumScreen() {
             </View>
           )}
 
-          {/* ===== CATALOG FILTERS ===== */}
+          {/* Catalog Filters */}
           <Text style={styles.sectionTitle}>Catalog</Text>
 
-          {/* Intention Filter */}
           <Text style={styles.filterLabel}>INTENTION</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
             {INTENTIONS.map((i) => (
@@ -240,7 +357,6 @@ export default function SanctumScreen() {
             ))}
           </ScrollView>
 
-          {/* Tradition Filter */}
           <Text style={styles.filterLabel}>TRADITION</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
             {TRADITIONS.map((t) => (
@@ -261,7 +377,7 @@ export default function SanctumScreen() {
             ))}
           </ScrollView>
 
-          <Text style={styles.sectionTitle}>Available Rituals ({filteredRituals.length})</Text>
+          <Text style={styles.sectionTitle}>Available ({filteredRituals.length})</Text>
           <FlatList
             data={filteredRituals}
             keyExtractor={(item) => item.id}
@@ -290,7 +406,7 @@ export default function SanctumScreen() {
                 </Pressable>
               );
             }}
-            contentContainerStyle={styles.ritualList}
+            contentContainerStyle={styles.listContent}
           />
         </View>
       </ScreenContainer>
@@ -298,25 +414,35 @@ export default function SanctumScreen() {
   }
 
   // ==========================================
-  // Ritual Completed Screen
+  // RITUAL COMPLETED
   // ==========================================
-  if (playerState === 'completed') {
+  if (hubView === 'player' && playerState === 'completed') {
     return (
       <ScreenContainer>
         <View style={styles.completedContainer}>
           <Text style={styles.completedSymbol}>✦</Text>
           <Text style={styles.completedTitle}>Ritual Complete</Text>
-          <Text style={styles.completedName}>{currentRitual.name}</Text>
+          <Text style={styles.completedName}>{currentRitual?.name}</Text>
           <Text style={styles.completedIntent}>
             Intent: {intent === 'BANISH' ? '↑ Banishing' : '↓ Invoking'}
           </Text>
           <Text style={styles.completedText}>
-            All {currentRitual.steps.length} steps have been performed.
+            All {currentRitual?.steps.length} steps have been performed.
           </Text>
+          {completionResult && (
+            <View style={styles.xpReward}>
+              <Text style={styles.xpRewardText}>+{completionResult.xpAwarded} XP</Text>
+              {completionResult.leveledUp && (
+                <Text style={styles.levelUpText}>LEVEL UP!</Text>
+              )}
+            </View>
+          )}
           <Pressable
             onPress={() => {
               if (Platform.OS !== ('web' as string)) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               resetRitual();
+              setCompletionResult(null);
+              setHubView('hub');
             }}
             style={({ pressed }) => [styles.startBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
           >
@@ -328,196 +454,303 @@ export default function SanctumScreen() {
   }
 
   // ==========================================
-  // Active Ritual Player – Holo-Pad Split-Screen
+  // ACTIVE RITUAL PLAYER
   // ==========================================
-  const currentStep = currentRitual.steps[currentStepIndex];
-  const progress = ((currentStepIndex + 1) / currentRitual.steps.length) * 100;
-  const needsCompass = !!currentStep?.compass_direction;
-  const hasTracingShape = !!currentStep?.ar_element;
-  const isTracingStep = currentStep?.action_type === 'TRACE';
-  const isTracingDetected = useRitualStore.getState().isTracingDetected;
+  if (hubView === 'player' && currentRitual && playerState !== 'idle') {
+    const currentStep = currentRitual.steps[currentStepIndex];
+    const progress = ((currentStepIndex + 1) / currentRitual.steps.length) * 100;
+    const needsCompass = !!currentStep?.compass_direction;
+    const hasTracingShape = !!currentStep?.ar_element;
+    const isTracingStep = currentStep?.action_type === 'TRACE';
+    const isTracingDetected = useRitualStore.getState().isTracingDetected;
+    const nextStepData = currentRitual.steps[currentStepIndex + 1];
+    const nextIsTrace = nextStepData?.action_type === 'TRACE';
+    const showHoloPad = hasTracingShape || isTracingStep || nextIsTrace;
+    const shapeData = currentStep?.ar_element || nextStepData?.ar_element;
 
-  const nextStepData = currentRitual.steps[currentStepIndex + 1];
-  const nextIsTrace = nextStepData?.action_type === 'TRACE';
-  const showHoloPad = hasTracingShape || isTracingStep || nextIsTrace;
+    const actionTypeColors: Record<string, string> = {
+      MOVEMENT: '#3B82F6', VIBRATION: '#D4AF37', VISUALIZATION: '#8B5CF6',
+      GESTURE: '#22C55E', TRACE: '#EF4444',
+    };
+    const actionColor = actionTypeColors[currentStep?.action_type ?? 'MOVEMENT'] ?? '#6B6B6B';
+    const isStepIncomplete = (
+      (playerState === 'compass_lock' && !isDirectionLocked) ||
+      (playerState === 'tracing' && !isTracingDetected)
+    );
 
-  const shapeData = currentStep?.ar_element || nextStepData?.ar_element;
+    // Trigger completion handler when reaching completed state
+    if (currentStepIndex === currentRitual.steps.length - 1 && !completionResult) {
+      handleRitualComplete();
+    }
 
-  const actionTypeColors: Record<string, string> = {
-    MOVEMENT: '#3B82F6',
-    VIBRATION: '#D4AF37',
-    VISUALIZATION: '#8B5CF6',
-    GESTURE: '#22C55E',
-    TRACE: '#EF4444',
-  };
-
-  const actionColor = actionTypeColors[currentStep?.action_type ?? 'MOVEMENT'] ?? '#6B6B6B';
-
-  // Non-blocking navigation: buttons are never disabled, but show visual warning
-  const isStepIncomplete = (
-    (playerState === 'compass_lock' && !isDirectionLocked) ||
-    (playerState === 'tracing' && !isTracingDetected)
-  );
-
-  return (
-    <ScreenContainer>
-      <View style={styles.playerContainer}>
-        {/* Progress bar */}
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${progress}%` }]} />
-        </View>
-
-        {/* Intent indicator */}
-        <View style={styles.intentIndicator}>
-          <Text style={[styles.intentIndicatorText, { color: intent === 'BANISH' ? '#00FFFF' : '#D4AF37' }]}>
-            {intent === 'BANISH' ? '↑ BANISH' : '↓ INVOKE'}
-          </Text>
-          <Text style={styles.stepCounter}>
-            Step {currentStepIndex + 1} / {currentRitual.steps.length}
-          </Text>
-        </View>
-
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.playerContent}
-        >
-          {/* ===== TOP SECTION: Instruction Card (40%) ===== */}
-          <View style={styles.instructionSection}>
-            {/* Compass direction indicator */}
-            {needsCompass && (
-              <View style={styles.compassLock}>
-                <Text style={[styles.compassDirection, isDirectionLocked && styles.compassAligned]}>
-                  {isDirectionLocked ? '✓' : '⟳'} Face {currentStep.compass_direction}
-                </Text>
-                {!isDirectionLocked && (
-                  <Text style={styles.compassHint}>
-                    {Platform.OS === ('web' as string)
-                      ? 'Tap to simulate alignment'
-                      : `Heading: ${heading.toFixed(0)}° — Align to ${currentStep.compass_direction}`}
-                  </Text>
-                )}
-                {Platform.OS === ('web' as string) && !isDirectionLocked && (
-                  <Pressable
-                    onPress={() => setDirectionLocked(true)}
-                    style={({ pressed }) => [styles.simBtn, pressed && { opacity: 0.7 }]}
-                  >
-                    <Text style={styles.simBtnText}>Simulate Alignment</Text>
-                  </Pressable>
-                )}
-              </View>
-            )}
-
-            {/* Action type badge */}
-            <View style={[styles.actionBadge, { borderColor: actionColor }]}>
-              <Text style={[styles.actionType, { color: actionColor }]}>
-                {currentStep?.action_type}
-              </Text>
-            </View>
-
-            {/* Main instruction */}
-            <View style={styles.instructionBox}>
-              <Text style={styles.instructionText}>
-                {currentStep?.instruction_text}
-              </Text>
-            </View>
-
-            {/* Vibration word */}
-            {currentStep?.audio_vibration && (
-              <View style={styles.vibrationBox}>
-                <Text style={styles.vibrationWord}>
-                  {currentStep.audio_vibration.word}
-                </Text>
-                <Text style={styles.vibrationPhonetic}>
-                  {currentStep.audio_vibration.phonetic}
-                </Text>
-              </View>
-            )}
+    return (
+      <ScreenContainer>
+        <View style={styles.playerContainer}>
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: `${progress}%` }]} />
           </View>
 
-          {/* ===== BOTTOM SECTION: Holo-Pad (60%) ===== */}
-          {showHoloPad && shapeData && (
-            <View style={styles.holoPadSection}>
-              <View style={styles.holoPadHeader}>
-                <Text style={styles.holoPadLabel}>Holo-Pad</Text>
-                {activeRune && (
-                  <View style={styles.activeTalismanBadge}>
-                    <Text style={styles.activeTalismanText}>⟡ {activeRune.name}</Text>
-                  </View>
-                )}
-              </View>
-              <HoloPad
-                shape={shapeData.shape}
-                colorHex={shapeData.color_hex}
-                isTraced={isTracingStep ? isTracingDetected : false}
-                onSimulateTrace={isTracingStep ? () => setTracingDetected(true) : undefined}
-                intent={intent}
-                isLBRP={isLBRP}
-                sigilLines={sigilData?.lines}
-                sigilPaths={sigilData?.paths}
-                sigilWidth={sigilData?.width}
-                sigilHeight={sigilData?.height}
-              />
-            </View>
-          )}
-        </ScrollView>
-
-        {/* Navigation buttons */}
-        <View style={styles.navRow}>
-          <Pressable
-            onPress={handlePrevStep}
-            style={({ pressed }) => [
-              styles.navBtn,
-              currentStepIndex === 0 && styles.navBtnDisabled,
-              pressed && { opacity: 0.7 },
-            ]}
-          >
-            <Text style={[styles.navBtnText, currentStepIndex === 0 && styles.navBtnTextDisabled]}>
-              ‹ Previous
+          <View style={styles.intentIndicator}>
+            <Text style={[styles.intentIndicatorText, { color: intent === 'BANISH' ? '#00FFFF' : '#D4AF37' }]}>
+              {intent === 'BANISH' ? '↑ BANISH' : '↓ INVOKE'}
             </Text>
-          </Pressable>
+            <Text style={styles.stepCounter}>
+              Step {currentStepIndex + 1} / {currentRitual.steps.length}
+            </Text>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.playerContent}>
+            {/* Instruction Section */}
+            <View style={styles.instructionSection}>
+              {needsCompass && (
+                <View style={styles.compassLock}>
+                  <Text style={[styles.compassDirection, isDirectionLocked && styles.compassAligned]}>
+                    {isDirectionLocked ? '✓' : '⟳'} Face {currentStep.compass_direction}
+                  </Text>
+                  {!isDirectionLocked && (
+                    <Text style={styles.compassHint}>
+                      {Platform.OS === ('web' as string)
+                        ? 'Tap to simulate alignment'
+                        : `Heading: ${heading.toFixed(0)}° — Align to ${currentStep.compass_direction}`}
+                    </Text>
+                  )}
+                  {Platform.OS === ('web' as string) && !isDirectionLocked && (
+                    <Pressable
+                      onPress={() => setDirectionLocked(true)}
+                      style={({ pressed }) => [styles.simBtn, pressed && { opacity: 0.7 }]}
+                    >
+                      <Text style={styles.simBtnText}>Simulate Alignment</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
+
+              <View style={[styles.actionBadge, { borderColor: actionColor }]}>
+                <Text style={[styles.actionType, { color: actionColor }]}>
+                  {currentStep?.action_type}
+                </Text>
+              </View>
+
+              <View style={styles.instructionBox}>
+                <Text style={styles.instructionText}>
+                  {currentStep?.instruction_text}
+                </Text>
+              </View>
+
+              {currentStep?.audio_vibration && (
+                <View style={styles.vibrationBox}>
+                  <Text style={styles.vibrationWord}>{currentStep.audio_vibration.word}</Text>
+                  <Text style={styles.vibrationPhonetic}>{currentStep.audio_vibration.phonetic}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Holo-Pad */}
+            {showHoloPad && shapeData && (
+              <View style={styles.holoPadSection}>
+                <View style={styles.holoPadHeader}>
+                  <Text style={styles.holoPadLabel}>Holo-Pad</Text>
+                  {activeRune && (
+                    <View style={styles.activeTalismanBadge}>
+                      <Text style={styles.activeTalismanText}>⟡ {activeRune.name}</Text>
+                    </View>
+                  )}
+                </View>
+                <HoloPad
+                  shape={shapeData.shape}
+                  colorHex={shapeData.color_hex}
+                  isTraced={isTracingStep ? isTracingDetected : false}
+                  onSimulateTrace={isTracingStep ? () => setTracingDetected(true) : undefined}
+                  intent={intent}
+                  isLBRP={isLBRP}
+                  sigilLines={sigilData?.lines}
+                  sigilPaths={sigilData?.paths}
+                  sigilWidth={sigilData?.width}
+                  sigilHeight={sigilData?.height}
+                />
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Navigation */}
+          <View style={styles.navRow}>
+            <Pressable
+              onPress={handlePrevStep}
+              style={({ pressed }) => [
+                styles.navBtn,
+                currentStepIndex === 0 && styles.navBtnDisabled,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Text style={[styles.navBtnText, currentStepIndex === 0 && styles.navBtnTextDisabled]}>
+                ‹ Previous
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                if (isStepIncomplete) {
+                  if (Platform.OS !== ('web' as string)) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                  Alert.alert('Step Incomplete', 'You may proceed, but the current step is not fully completed.', [
+                    { text: 'Stay', style: 'cancel' },
+                    { text: 'Proceed Anyway', onPress: handleNextStep },
+                  ]);
+                } else {
+                  handleNextStep();
+                }
+              }}
+              style={({ pressed }) => [
+                styles.navBtn, styles.navBtnNext,
+                isStepIncomplete && { opacity: 0.6 },
+                pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
+              ]}
+            >
+              <Text style={styles.navBtnNextText}>
+                {currentStepIndex === currentRitual.steps.length - 1 ? 'Complete' : 'Next ›'}
+              </Text>
+            </Pressable>
+          </View>
 
           <Pressable
             onPress={() => {
-              if (isStepIncomplete) {
-                if (Platform.OS !== ('web' as string)) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                Alert.alert('Step Incomplete', 'You may proceed, but the current step is not fully completed.', [
-                  { text: 'Stay', style: 'cancel' },
-                  { text: 'Proceed Anyway', onPress: handleNextStep },
-                ]);
-              } else {
-                handleNextStep();
-              }
+              resetRitual();
+              setCompletionResult(null);
+              setHubView('catalog');
             }}
-            style={({ pressed }) => [
-              styles.navBtn,
-              styles.navBtnNext,
-              isStepIncomplete && { opacity: 0.6 },
-              pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
-            ]}
+            style={({ pressed }) => [styles.exitBtn, pressed && { opacity: 0.7 }]}
           >
-            <Text style={styles.navBtnNextText}>
-              {currentStepIndex === currentRitual.steps.length - 1 ? 'Complete' : 'Next ›'}
-            </Text>
+            <Text style={styles.exitBtnText}>Exit Ritual</Text>
+          </Pressable>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  // ==========================================
+  // HUB VIEW (Tile Layout)
+  // ==========================================
+  return (
+    <ScreenContainer>
+      <ScrollView contentContainerStyle={styles.hubContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.title}>Sanctum</Text>
+        <Text style={styles.subtitle}>Your Sacred Space</Text>
+
+        {/* Hub Tiles */}
+        <View style={styles.tileGrid}>
+          {/* Stasis Tile */}
+          <Pressable
+            onPress={() => handleTilePress('stasis')}
+            style={({ pressed }) => [styles.tile, styles.tileStasis, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+          >
+            <Text style={styles.tileIcon}>◎</Text>
+            <Text style={styles.tileTitle}>Stasis</Text>
+            <Text style={styles.tileDesc}>Meditation & Breathing</Text>
+            <Text style={styles.tileMeta}>4-4-4-4 Box Breathing</Text>
+          </Pressable>
+
+          {/* Rituals Tile */}
+          <Pressable
+            onPress={() => handleTilePress('catalog')}
+            style={({ pressed }) => [styles.tile, styles.tileRituals, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+          >
+            <Text style={styles.tileIcon}>⟐</Text>
+            <Text style={styles.tileTitle}>Rituals</Text>
+            <Text style={styles.tileDesc}>Perform & Practice</Text>
+            <Text style={styles.tileMeta}>{rituals.length} available</Text>
+          </Pressable>
+
+          {/* Library Tile */}
+          <Pressable
+            onPress={() => handleTilePress('library')}
+            style={({ pressed }) => [styles.tile, styles.tileLibrary, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+          >
+            <Text style={styles.tileIcon}>📖</Text>
+            <Text style={styles.tileTitle}>Library</Text>
+            <Text style={styles.tileDesc}>Knowledge Base</Text>
+            <Text style={styles.tileMeta}>Study ritual texts</Text>
+          </Pressable>
+
+          {/* Forge/Runes Tile */}
+          <Pressable
+            onPress={() => {
+              if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push('/(tabs)/runes');
+            }}
+            style={({ pressed }) => [styles.tile, styles.tileForge, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+          >
+            <Text style={styles.tileIcon}>✦</Text>
+            <Text style={styles.tileTitle}>Forge</Text>
+            <Text style={styles.tileDesc}>Create Bindrunes</Text>
+            <Text style={styles.tileMeta}>Rune Workshop</Text>
           </Pressable>
         </View>
 
-        {/* Exit button */}
-        <Pressable
-          onPress={() => resetRitual()}
-          style={({ pressed }) => [styles.exitBtn, pressed && { opacity: 0.7 }]}
-        >
-          <Text style={styles.exitBtnText}>Exit Ritual</Text>
-        </Pressable>
-      </View>
+        {/* Quick Actions */}
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={styles.quickRow}>
+          <Pressable
+            onPress={() => {
+              if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(tabs)/wallet');
+            }}
+            style={({ pressed }) => [styles.quickBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.quickBtnIcon}>⟡</Text>
+            <Text style={styles.quickBtnText}>Wallet</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(tabs)/settings');
+            }}
+            style={({ pressed }) => [styles.quickBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.quickBtnIcon}>⚙</Text>
+            <Text style={styles.quickBtnText}>Settings</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
+  hubContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 },
   title: { fontFamily: 'Cinzel', fontSize: 28, color: '#D4AF37', textAlign: 'center', letterSpacing: 4 },
   subtitle: { fontSize: 13, color: '#6B6B6B', textAlign: 'center', marginTop: 4 },
-  sectionTitle: { fontFamily: 'Cinzel', fontSize: 16, color: '#E0E0E0', marginTop: 24, marginBottom: 8, letterSpacing: 2 },
+  sectionTitle: { fontFamily: 'Cinzel', fontSize: 14, color: '#E0E0E0', marginTop: 24, marginBottom: 8, letterSpacing: 2 },
+
+  // Back button
+  backBtn: { paddingVertical: 8, paddingRight: 16, alignSelf: 'flex-start' },
+  backBtnText: { fontSize: 15, color: '#D4AF37', letterSpacing: 1 },
+
+  // Hub Tiles
+  tileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 20 },
+  tile: {
+    width: (SW - 42) / 2, backgroundColor: '#0D0D0D', borderWidth: 1,
+    borderRadius: 16, padding: 16, minHeight: 130,
+  },
+  tileStasis: { borderColor: '#22C55E30' },
+  tileRituals: { borderColor: '#D4AF3730' },
+  tileLibrary: { borderColor: '#3B82F630' },
+  tileForge: { borderColor: '#8B5CF630' },
+  tileIcon: { fontSize: 28, color: '#D4AF37', marginBottom: 8 },
+  tileTitle: { fontFamily: 'Cinzel', fontSize: 16, color: '#E0E0E0', letterSpacing: 2 },
+  tileDesc: { fontSize: 12, color: '#6B6B6B', marginTop: 4 },
+  tileMeta: { fontFamily: 'JetBrainsMono', fontSize: 9, color: '#4A4A4A', marginTop: 8, letterSpacing: 1 },
+
+  // Quick Actions
+  quickRow: { flexDirection: 'row', gap: 10 },
+  quickBtn: {
+    flex: 1, backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
+    borderRadius: 12, paddingVertical: 14, alignItems: 'center', flexDirection: 'row',
+    justifyContent: 'center', gap: 8,
+  },
+  quickBtnIcon: { fontSize: 16, color: '#D4AF37' },
+  quickBtnText: { fontSize: 13, color: '#E0E0E0' },
+
+  // Selected Ritual
   selectedRitual: {
     backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#D4AF3740',
     borderRadius: 12, padding: 16, marginTop: 16,
@@ -537,12 +770,8 @@ const styles = StyleSheet.create({
     flex: 1, borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 12,
     paddingVertical: 12, alignItems: 'center', backgroundColor: '#080808',
   },
-  intentBtnActiveBanish: {
-    borderColor: '#00FFFF60', backgroundColor: '#00FFFF08',
-  },
-  intentBtnActiveInvoke: {
-    borderColor: '#D4AF3760', backgroundColor: '#D4AF3708',
-  },
+  intentBtnActiveBanish: { borderColor: '#00FFFF60', backgroundColor: '#00FFFF08' },
+  intentBtnActiveInvoke: { borderColor: '#D4AF3760', backgroundColor: '#D4AF3708' },
   intentBtnText: { fontSize: 14, fontWeight: '700', color: '#6B6B6B', letterSpacing: 1 },
   intentBtnTextActive: { color: '#E0E0E0' },
   intentBtnSub: { fontSize: 10, color: '#6B6B6B', marginTop: 2 },
@@ -556,7 +785,22 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginTop: 16,
   },
   startBtnText: { color: '#050505', fontSize: 15, fontWeight: '700', letterSpacing: 1 },
-  ritualList: { paddingBottom: 100 },
+
+  // Catalog
+  filterLabel: {
+    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B',
+    letterSpacing: 2, marginTop: 12, marginBottom: 4,
+  },
+  filterRow: { flexDirection: 'row', marginBottom: 4 },
+  filterChip: {
+    borderWidth: 1, borderColor: '#333333', borderRadius: 16,
+    paddingHorizontal: 12, paddingVertical: 6, marginRight: 6, backgroundColor: '#0D0D0D',
+  },
+  filterChipActive: { borderColor: '#D4AF3760', backgroundColor: '#D4AF3715' },
+  filterChipText: { fontSize: 11, color: '#C0C0C0', fontWeight: '500' },
+  filterChipTextActive: { color: '#D4AF37', fontWeight: '700' },
+
+  listContent: { paddingBottom: 100 },
   ritualCard: {
     backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
     borderRadius: 12, padding: 14, marginBottom: 8,
@@ -572,21 +816,28 @@ const styles = StyleSheet.create({
   ritualTagTradition: { backgroundColor: '#00FFFF10', borderColor: '#00FFFF30' },
   ritualTagText: { fontFamily: 'JetBrainsMono', fontSize: 9, color: '#D4AF37', letterSpacing: 0.5 },
 
-  // Catalog Filters
-  filterLabel: {
-    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B',
-    letterSpacing: 2, marginTop: 12, marginBottom: 4,
+  // Library
+  libraryCard: {
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
+    borderRadius: 12, padding: 14, marginBottom: 8,
   },
-  filterRow: { flexDirection: 'row', marginBottom: 4 },
-  filterChip: {
-    borderWidth: 1, borderColor: '#333333', borderRadius: 16,
-    paddingHorizontal: 12, paddingVertical: 6, marginRight: 6, backgroundColor: '#0D0D0D',
-  },
-  filterChipActive: { borderColor: '#D4AF3760', backgroundColor: '#D4AF3715' },
-  filterChipText: { fontSize: 11, color: '#C0C0C0', fontWeight: '500' },
-  filterChipTextActive: { color: '#D4AF37', fontWeight: '700' },
+  libraryCardName: { fontFamily: 'Cinzel', fontSize: 15, color: '#D4AF37', letterSpacing: 1 },
+  libraryCardDesc: { fontSize: 12, color: '#6B6B6B', marginTop: 4, lineHeight: 18 },
+  libraryCardMeta: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#4A4A4A', marginTop: 6 },
+  libraryMd: { fontSize: 13, color: '#E0E0E0', lineHeight: 22, marginTop: 12 },
 
-  // Player styles
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
+  modalContent: {
+    backgroundColor: '#0D0D0D', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24, paddingBottom: 40, maxHeight: '80%',
+  },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#333', alignSelf: 'center', marginBottom: 20 },
+  modalTitle: { fontFamily: 'Cinzel', fontSize: 20, color: '#D4AF37', textAlign: 'center', letterSpacing: 2 },
+  modalCloseBtn: { backgroundColor: '#D4AF37', borderRadius: 20, paddingVertical: 14, alignItems: 'center', marginTop: 20 },
+  modalCloseBtnText: { color: '#050505', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
+
+  // Player
   playerContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
   playerContent: { paddingBottom: 16 },
   progressBar: { height: 3, backgroundColor: '#1A1A1A', borderRadius: 2, overflow: 'hidden' },
@@ -598,7 +849,6 @@ const styles = StyleSheet.create({
   intentIndicatorText: { fontFamily: 'JetBrainsMono', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
   stepCounter: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B' },
 
-  // Instruction section (top 40%)
   instructionSection: { marginTop: 8 },
   compassLock: {
     backgroundColor: '#0055A415', borderWidth: 1, borderColor: '#0055A440',
@@ -626,16 +876,18 @@ const styles = StyleSheet.create({
   vibrationWord: { fontFamily: 'Cinzel', fontSize: 22, color: '#D4AF37', letterSpacing: 2 },
   vibrationPhonetic: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', marginTop: 4 },
 
-  // Holo-Pad section (bottom 60%)
-  holoPadSection: {
-    marginTop: 16, alignItems: 'center',
-  },
+  holoPadSection: { marginTop: 16, alignItems: 'center' },
   holoPadLabel: {
     fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B',
     letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8,
   },
+  holoPadHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  activeTalismanBadge: {
+    backgroundColor: '#D4AF3720', borderWidth: 1, borderColor: '#D4AF3740',
+    borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3,
+  },
+  activeTalismanText: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#D4AF37', letterSpacing: 1 },
 
-  // Navigation
   navRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, gap: 12 },
   navBtn: {
     flex: 1, borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 12,
@@ -656,12 +908,7 @@ const styles = StyleSheet.create({
   completedName: { fontSize: 15, color: '#E0E0E0', marginTop: 8, textAlign: 'center' },
   completedIntent: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', marginTop: 4 },
   completedText: { fontSize: 13, color: '#6B6B6B', marginTop: 8, textAlign: 'center' },
-
-  // Active Talisman
-  holoPadHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  activeTalismanBadge: {
-    backgroundColor: '#D4AF3720', borderWidth: 1, borderColor: '#D4AF3740',
-    borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3,
-  },
-  activeTalismanText: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#D4AF37', letterSpacing: 1 },
+  xpReward: { marginTop: 16, alignItems: 'center' },
+  xpRewardText: { fontFamily: 'JetBrainsMono', fontSize: 20, color: '#22C55E', fontWeight: '700' },
+  levelUpText: { fontFamily: 'Cinzel', fontSize: 16, color: '#FFD700', marginTop: 4, letterSpacing: 3 },
 });

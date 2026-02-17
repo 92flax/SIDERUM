@@ -23,6 +23,12 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
+    magicName: null,
+    levelRank: 0,
+    xpTotal: 0,
+    stasisStreak: 0,
+    natalData: null,
+    activeRuneId: null,
   };
   
   const ctx: TrpcContext = {

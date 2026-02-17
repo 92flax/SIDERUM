@@ -236,3 +236,47 @@
 - [x] Chart: Make every planet name/icon clickable with detail modal (already implemented)
 - [x] Dashboard: Add onClick tooltips for Path of Fortune, Path of Spirit, Aspects
 - [x] Non-blocking navigation: Never disable Next buttons, show warning toast instead
+
+## Digital Grimoire Refactoring
+
+### Phase 1: Database & Schema Updates
+- [x] Modify users table: add magic_name, level_rank, xp_total, stasis_streak, natal_data, active_rune_id
+- [x] Create leaderboard_cache table (rank, magic_name, xp_total, level_rank)
+- [x] Create user_analytics table (element XP, stasis minutes, rituals count, activity heatmap)
+
+### Phase 2: Content Architecture (CMS Mocking)
+- [x] Move rituals_db.json data to lib/content/local-fallback.ts
+- [x] Create ContentProvider class in lib/content/client.ts with async getRituals()
+- [x] Create ritual completion handler (lib/ritual/completion-handler.ts) with XP/element tracking
+- [x] Update Sanctum to use ContentProvider instead of direct JSON imports
+
+### Phase 3: Onboarding & Rune Logic
+- [x] Refactor onboarding wizard: Step 1 Identity (magic_name + birth data)
+- [x] Onboarding Step 2: Multi-select intentions
+- [x] Onboarding Step 3: Procedural Master Rune forge
+- [x] Onboarding Step 4: Tap & Hold activation, save to DB
+- [x] Rune Wallet: grid display with single-selection toggle for active_rune_id
+
+### Phase 4: UI Refactoring & Sensor Fixes
+- [x] Compass stabilization: Low-Pass Filter (smoothed = prev*0.95 + curr*0.05)
+- [x] Dashboard Header: magic_name | XP Progress Bar | Power Rating %
+- [x] Sanctum Hub: Tile layout [Meditation/Stasis] [Rituals] [Library] [Events]
+- [x] Radar Screen: Merge compass.tsx + chart.tsx into radar.tsx with glassmorphism bottom sheet
+- [x] Delete chart.tsx tab, move PlanetCard logic to Radar bottom sheet
+- [x] Create Leaderboard/Path screen (app/(tabs)/path.tsx) with Outer/Inner Order tabs
+
+### Phase 5: Adept Analytics
+- [x] Create adept.tsx screen with Grimoire Analytics
+- [x] Elemental Radar: 5-axis radar chart (Earth, Air, Fire, Water, Spirit)
+- [x] Consistency Heatmap: 3-month activity grid (Gray→Blue→Gold)
+- [x] Planetary Affinity: Donut chart of top 3 invoked planetary forces
+
+### Phase 6: Logic & Algorithms
+- [x] Stasis Mode: 4-4-4-4 breathing timer with session tracking
+- [x] Power Rating update: 40% Transits + 40% Natal + 20% Active Rune
+- [x] Stasis Buff: x1.15 multiplier if session > 5min within last 60min
+
+### UI Polish
+- [x] Install and use lucide-react-native for tab bar icons
+- [x] Tab icons: Home→Home, Sanctum→Flame, Radar→Compass, Path→Trophy, Adept→User
+- [x] Compass smoothing factor tied to frame rate

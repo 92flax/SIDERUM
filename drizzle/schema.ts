@@ -1,17 +1,11 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, json, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
+ * Extended with Digital Grimoire fields for the initiatic system.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -20,9 +14,50 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+
+  // Digital Grimoire fields
+  magicName: varchar("magicName", { length: 128 }),
+  levelRank: int("levelRank").default(0).notNull(),
+  xpTotal: int("xpTotal").default(0).notNull(),
+  stasisStreak: int("stasisStreak").default(0).notNull(),
+  natalData: json("natalData"),
+  activeRuneId: varchar("activeRuneId", { length: 128 }),
+});
+
+/**
+ * Leaderboard cache for optimized read-heavy access on the "Path" screen.
+ */
+export const leaderboardCache = mysqlTable("leaderboard_cache", {
+  id: int("id").autoincrement().primaryKey(),
+  rank: int("rank").notNull(),
+  magicName: varchar("magicName", { length: 128 }).notNull(),
+  xpTotal: int("xpTotal").default(0).notNull(),
+  levelRank: int("levelRank").default(0).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/**
+ * User analytics table — "The Mirror of the Soul"
+ * Tracks elemental XP, stasis minutes, ritual count, and daily activity for heatmap.
+ */
+export const userAnalytics = mysqlTable("user_analytics", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  elementEarthXp: int("elementEarthXp").default(0).notNull(),
+  elementAirXp: int("elementAirXp").default(0).notNull(),
+  elementFireXp: int("elementFireXp").default(0).notNull(),
+  elementWaterXp: int("elementWaterXp").default(0).notNull(),
+  elementSpiritXp: int("elementSpiritXp").default(0).notNull(),
+  totalStasisMinutes: int("totalStasisMinutes").default(0).notNull(),
+  ritualsPerformedCount: int("ritualsPerformedCount").default(0).notNull(),
+  /** Format: {"2026-02-15": 50} — stores daily XP for the heatmap */
+  last365DaysActivity: json("last365DaysActivity"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
-
-// TODO: Add your tables here
+export type LeaderboardEntry = typeof leaderboardCache.$inferSelect;
+export type InsertLeaderboardEntry = typeof leaderboardCache.$inferInsert;
+export type UserAnalyticsRow = typeof userAnalytics.$inferSelect;
+export type InsertUserAnalytics = typeof userAnalytics.$inferInsert;
