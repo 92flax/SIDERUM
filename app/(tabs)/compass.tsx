@@ -1,13 +1,13 @@
 // ============================================================
 // ÆONIS – Magical AR Astrolabe (Radar Screen)
-// Premium redesign: Reticle, Rotating Compass Ring,
+// Rotating Compass Ring, Planet Legend with Focus Mode,
 // Glassmorphism HUD, merged PlanetCard bottom sheet
 // ============================================================
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Text, View, StyleSheet, Dimensions, Platform, Pressable,
-  Modal, ScrollView, Animated,
+  Modal, ScrollView, FlatList,
 } from 'react-native';
 import { Magnetometer, DeviceMotion } from 'expo-sensors';
 import Svg, {
@@ -51,6 +51,12 @@ const PLANET_INFO: Record<string, { element: string; principle: string; descript
   Saturn:  { element: 'Earth', principle: 'Structure & Limitation', description: 'Saturn rules discipline, time, boundaries, and karma.' },
 };
 
+// Planets that appear on the radar ring
+const RADAR_PLANETS: Planet[] = [
+  'Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn',
+];
+
+// All planets for the bottom sheet list
 const MAIN_PLANETS: Planet[] = [
   'Sun', 'Moon', 'Mercury', 'Venus', 'Mars',
   'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto',
@@ -108,25 +114,6 @@ function getCardinalDirection(heading: number): string {
   return dirs[Math.round(heading / 45) % 8];
 }
 
-function isCardinalAligned(heading: number): boolean {
-  const cardinals = [0, 90, 180, 270];
-  return cardinals.some(c => {
-    let diff = Math.abs(heading - c);
-    if (diff > 180) diff = 360 - diff;
-    return diff <= 5;
-  });
-}
-
-function isPlanetAligned(heading: number, planets: Array<{ azimuth?: number }>): boolean {
-  return planets.some(p => {
-    const az = safeNum(p.azimuth, -999);
-    if (az < 0) return false;
-    let diff = Math.abs(heading - az);
-    if (diff > 180) diff = 360 - diff;
-    return diff <= 8;
-  });
-}
-
 function getScoreVerdict(score: number): { text: string; color: string } {
   if (score >= 7) return { text: 'Exceptional power. Ideal for rituals.', color: '#22C55E' };
   if (score >= 4) return { text: 'Strong dignity. Favorable conditions.', color: '#22C55E' };
@@ -161,8 +148,8 @@ export default function RadarScreen() {
   const [selectedAspect, setSelectedAspect] = useState<Aspect | null>(null);
   const [selectedDignity, setSelectedDignity] = useState<string | null>(null);
 
-  // Reticle glow animation
-  const reticleGlow = useRef(new Animated.Value(0)).current;
+  // Focus mode: when a planet is selected in the legend, only that planet shows on radar
+  const [focusedPlanet, setFocusedPlanet] = useState<string | null>(null);
 
   const chartData = useAstroStore((s) => s.chartData);
   const location = useAstroStore((s) => s.location);
@@ -215,16 +202,22 @@ export default function RadarScreen() {
     return () => { motionSub?.remove(); };
   }, []);
 
-  // Planets with mock fallback
-  const planets = useMemo(() => {
+  // Planets with mock fallback (for radar ring)
+  const radarPlanets = useMemo(() => {
     const raw = chartData?.planets.filter(p =>
-      ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'].includes(p.planet)
+      RADAR_PLANETS.includes(p.planet)
     ) ?? [];
     return raw.map(p => {
       const mock = MOCK_POSITIONS[p.planet];
       return { ...p, azimuth: safeNum(p.azimuth, mock?.azimuth ?? 0), altitude: safeNum(p.altitude, mock?.altitude ?? 20) };
     });
   }, [chartData]);
+
+  // Filtered radar planets based on focus mode
+  const visibleRadarPlanets = useMemo(() => {
+    if (!focusedPlanet) return radarPlanets;
+    return radarPlanets.filter(p => p.planet === focusedPlanet);
+  }, [radarPlanets, focusedPlanet]);
 
   const allPlanets = useMemo(() => {
     if (!chartData) return [];
@@ -238,33 +231,15 @@ export default function RadarScreen() {
 
   const planetaryHour = useMemo(() => calculatePlanetaryHours(date, location), [date, location]);
 
-  // Reticle alignment detection
-  const aligned = useMemo(() => {
-    const cardinal = isCardinalAligned(heading);
-    const planet = isPlanetAligned(heading, planets);
-    return cardinal || planet;
-  }, [heading, planets]);
-
-  // Animate reticle glow
-  useEffect(() => {
-    Animated.timing(reticleGlow, {
-      toValue: aligned ? 1 : 0,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
-    if (aligned && Platform.OS !== ('web' as string)) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-  }, [aligned]);
-
-  const reticleColor = reticleGlow.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['rgba(212,175,55,0.35)', 'rgba(0,255,255,0.9)'],
-  });
-
   const handlePlanetInfo = useCallback((planet: string) => {
     if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setInfoPlanet(planet);
+  }, []);
+
+  // Toggle focus mode from legend
+  const handleLegendPress = useCallback((planet: string) => {
+    if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFocusedPlanet(prev => prev === planet ? null : planet);
   }, []);
 
   // ==========================================
@@ -272,7 +247,8 @@ export default function RadarScreen() {
   // ==========================================
   const renderCompassRing = useCallback(() => {
     // The ring rotates so that North on the ring faces True North
-    // Negative heading rotation = ring turns opposite to user facing direction
+    // When user faces North (heading=0), ring is at 0° rotation
+    // When user faces East (heading=90), ring rotates -90° so N moves left
     const rotation = -heading;
 
     return (
@@ -350,8 +326,8 @@ export default function RadarScreen() {
               );
             })}
 
-            {/* Planet dots on the ring */}
-            {planets.map((p) => {
+            {/* Planet dots on the ring (filtered by focus mode) */}
+            {visibleRadarPlanets.map((p) => {
               const az = safeNum(p.azimuth, 0);
               const rad = (az * Math.PI) / 180;
               const altFactor = Math.max(0.15, 1 - Math.abs(safeNum(p.altitude, 20)) / 90);
@@ -361,28 +337,29 @@ export default function RadarScreen() {
               const color = PLANET_COLORS[p.planet] || '#E0E0E0';
               const dignity = chartData?.dignities[p.planet];
               const isStrong = dignity && dignity.score > 0;
+              const isFocused = focusedPlanet === p.planet;
 
               return (
                 <G key={p.planet}>
                   {/* Connection line */}
                   <Line x1={RING_CENTER} y1={RING_CENTER} x2={px} y2={py}
                     stroke={color + '18'} strokeWidth={0.6} strokeDasharray="2,4" />
-                  {/* Glow for strong planets */}
-                  {isStrong && (
+                  {/* Glow for strong or focused planets */}
+                  {(isStrong || isFocused) && (
                     <>
-                      <Circle cx={px} cy={py} r={16} fill={color + '08'} />
-                      <Circle cx={px} cy={py} r={12} fill={color + '12'} />
+                      <Circle cx={px} cy={py} r={isFocused ? 22 : 16} fill={color + '08'} />
+                      <Circle cx={px} cy={py} r={isFocused ? 16 : 12} fill={color + '12'} />
                     </>
                   )}
                   {/* Planet dot */}
-                  <Circle cx={px} cy={py} r={6} fill={color} />
-                  <Circle cx={px} cy={py} r={6} fill="none" stroke={color} strokeWidth={1} opacity={0.5} />
+                  <Circle cx={px} cy={py} r={isFocused ? 8 : 6} fill={color} />
+                  <Circle cx={px} cy={py} r={isFocused ? 8 : 6} fill="none" stroke={color} strokeWidth={1} opacity={0.5} />
                   {/* Label */}
-                  <SvgText x={px} y={py - 12} fill={color} fontSize={11}
+                  <SvgText x={px} y={py - 14} fill={color} fontSize={isFocused ? 14 : 11}
                     fontWeight="bold" textAnchor="middle">
                     {PLANET_SYMBOLS[p.planet]}
                   </SvgText>
-                  <SvgText x={px} y={py + 16} fill="#6B6B6B" fontSize={7} textAnchor="middle">
+                  <SvgText x={px} y={py + 18} fill="#9B9B9B" fontSize={isFocused ? 9 : 7} textAnchor="middle">
                     {PLANET_NAMES[p.planet]}
                   </SvgText>
                   {/* Tap target */}
@@ -393,7 +370,7 @@ export default function RadarScreen() {
             })}
           </G>
 
-          {/* Fixed center reticle (does NOT rotate) */}
+          {/* Fixed center dot (small, no crosshair) */}
           <Circle cx={RING_CENTER} cy={RING_CENTER} r={3} fill="#D4AF37" opacity={0.9} />
           <Circle cx={RING_CENTER} cy={RING_CENTER} r={8} fill="none" stroke="#D4AF3760" strokeWidth={0.8} />
 
@@ -405,30 +382,52 @@ export default function RadarScreen() {
         </Svg>
       </View>
     );
-  }, [heading, planets, chartData]);
+  }, [heading, visibleRadarPlanets, chartData, focusedPlanet]);
 
   // ==========================================
-  // RETICLE CROSSHAIR OVERLAY
+  // PLANET LEGEND (below compass ring)
   // ==========================================
-  const renderReticle = useCallback(() => {
+  const renderLegend = useCallback(() => {
     return (
-      <View style={styles.reticleContainer} pointerEvents="none">
-        {/* Horizontal line */}
-        <Animated.View style={[styles.reticleH, { backgroundColor: reticleColor }]} />
-        {/* Vertical line */}
-        <Animated.View style={[styles.reticleV, { backgroundColor: reticleColor }]} />
-        {/* Center diamond */}
-        <Animated.View style={[styles.reticleDiamond, {
-          borderColor: reticleColor,
-        }]} />
-        {/* Corner brackets */}
-        <Animated.View style={[styles.bracketTL, { borderColor: reticleColor }]} />
-        <Animated.View style={[styles.bracketTR, { borderColor: reticleColor }]} />
-        <Animated.View style={[styles.bracketBL, { borderColor: reticleColor }]} />
-        <Animated.View style={[styles.bracketBR, { borderColor: reticleColor }]} />
+      <View style={styles.legendContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.legendScroll}>
+          {radarPlanets.map((p) => {
+            const color = PLANET_COLORS[p.planet] || '#E0E0E0';
+            const isFocused = focusedPlanet === p.planet;
+            return (
+              <Pressable
+                key={p.planet}
+                onPress={() => handleLegendPress(p.planet)}
+                style={({ pressed }) => [
+                  styles.legendItem,
+                  isFocused && styles.legendItemFocused,
+                  isFocused && { borderColor: color + '80' },
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <View style={[styles.legendDot, { backgroundColor: color }]} />
+                <Text style={[
+                  styles.legendName,
+                  isFocused && { color: color, fontWeight: '700' },
+                ]}>
+                  {PLANET_SYMBOLS[p.planet]} {PLANET_NAMES[p.planet]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        {focusedPlanet && (
+          <Pressable
+            onPress={() => setFocusedPlanet(null)}
+            style={({ pressed }) => [styles.clearFocusBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.clearFocusText}>Show All</Text>
+          </Pressable>
+        )}
       </View>
     );
-  }, [reticleColor]);
+  }, [radarPlanets, focusedPlanet]);
 
   // ==========================================
   // PLANET CARD (from chart.tsx)
@@ -580,24 +579,15 @@ export default function RadarScreen() {
           </View>
         )}
 
-        {/* ===== AR VIEWFINDER + COMPASS RING ===== */}
+        {/* ===== COMPASS RING ===== */}
         <View style={styles.viewfinderContainer}>
-          {/* Dark "camera" background */}
           <View style={styles.viewfinderBg}>
-            {/* Compass Ring */}
             {renderCompassRing()}
-
-            {/* Reticle overlay */}
-            {renderReticle()}
-
-            {/* Alignment indicator */}
-            {aligned && (
-              <View style={styles.alignedBadge}>
-                <Text style={styles.alignedText}>ALIGNED</Text>
-              </View>
-            )}
           </View>
         </View>
+
+        {/* ===== PLANET LEGEND (below compass) ===== */}
+        {renderLegend()}
 
         {/* ===== BOTTOM SHEET (Glassmorphism) ===== */}
         <View style={styles.sheetOuter}>
@@ -843,51 +833,38 @@ const styles = StyleSheet.create({
   // ===== Compass Ring =====
   ringContainer: { alignItems: 'center', justifyContent: 'center' },
 
-  // ===== Reticle =====
-  reticleContainer: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center', justifyContent: 'center',
+  // ===== Planet Legend =====
+  legendContainer: {
+    marginTop: 12, marginHorizontal: 16,
+    alignItems: 'center',
   },
-  reticleH: {
-    position: 'absolute', height: 1,
-    left: '30%', right: '30%',
+  legendScroll: {
+    paddingHorizontal: 4, gap: 6,
   },
-  reticleV: {
-    position: 'absolute', width: 1,
-    top: '30%', bottom: '30%',
+  legendItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8,
+    backgroundColor: '#0D0D0D80',
+    borderWidth: 1, borderColor: '#1A1A1A',
+    borderRadius: 20,
   },
-  reticleDiamond: {
-    position: 'absolute', width: 12, height: 12,
-    borderWidth: 1, borderRadius: 2,
-    transform: [{ rotate: '45deg' }],
+  legendItemFocused: {
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1.5,
   },
-  bracketTL: {
-    position: 'absolute', top: '25%', left: '25%',
-    width: 16, height: 16, borderTopWidth: 1, borderLeftWidth: 1,
+  legendDot: {
+    width: 8, height: 8, borderRadius: 4,
   },
-  bracketTR: {
-    position: 'absolute', top: '25%', right: '25%',
-    width: 16, height: 16, borderTopWidth: 1, borderRightWidth: 1,
+  legendName: {
+    fontSize: 12, color: '#9B9B9B', fontWeight: '500',
   },
-  bracketBL: {
-    position: 'absolute', bottom: '25%', left: '25%',
-    width: 16, height: 16, borderBottomWidth: 1, borderLeftWidth: 1,
+  clearFocusBtn: {
+    marginTop: 8, paddingHorizontal: 16, paddingVertical: 6,
+    borderRadius: 12, borderWidth: 1, borderColor: '#D4AF3740',
+    backgroundColor: '#0D0D0D80',
   },
-  bracketBR: {
-    position: 'absolute', bottom: '25%', right: '25%',
-    width: 16, height: 16, borderBottomWidth: 1, borderRightWidth: 1,
-  },
-
-  // ===== Aligned Badge =====
-  alignedBadge: {
-    position: 'absolute', top: 12, alignSelf: 'center',
-    paddingHorizontal: 12, paddingVertical: 4,
-    backgroundColor: '#00FFFF15', borderWidth: 1, borderColor: '#00FFFF60',
-    borderRadius: 12,
-  },
-  alignedText: {
-    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#00FFFF',
-    letterSpacing: 2, fontWeight: '700',
+  clearFocusText: {
+    fontSize: 11, color: '#D4AF37', fontWeight: '600', letterSpacing: 1,
   },
 
   // ===== Bottom Sheet =====

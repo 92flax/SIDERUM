@@ -296,3 +296,14 @@
 - [x] Bottom Sheet: Swipe-up glass panel with merged planetary list from chart.tsx
 - [x] Planet rows: Icon, Name, Degree, Zodiac Sign
 - [x] Glassmorphism style: blur 20, opacity 0.8 dark, 1px gold border
+
+## Radar Fixes & Legend
+
+### Compass Direction Fix
+- [x] Fix compass still showing inverted direction (East shows West) – remove the +180° offset
+- [x] Remove reticle/crosshair overlay from compass ring
+
+### Planet Legend & Focus Mode
+- [x] Add planet legend below compass with all planet names and colored dots
+- [x] Click on legend planet = only that planet visible on radar, others disappear
+- [x] Click again to deselect and show all planets

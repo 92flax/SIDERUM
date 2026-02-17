@@ -1,6 +1,6 @@
 // ============================================================
 // ÆONIS – Sensor Fusion for Ritual Compass
-// Corrected 180° heading, robust low-pass filter, frame-aware
+// Correct heading formula, robust low-pass filter
 // ============================================================
 
 import { Platform } from 'react-native';
@@ -33,21 +33,22 @@ export function resetHeadingFilter(): void {
 /**
  * Calculate compass heading from magnetometer data.
  *
- * FIX: The previous formula produced a 180° inverted result.
- * Correct approach:
- *   1. atan2(-magX, magY) → raw angle from magnetic north
- *   2. Normalize to 0-360
- *   3. Add 180° to correct the inversion
- *   4. Apply low-pass filter for stabilization
+ * The standard formula for compass heading from magnetometer:
+ *   heading = atan2(magX, magY)
+ * This gives the angle in degrees where 0° = North (positive Y),
+ * increasing clockwise (East = 90°, South = 180°, West = 270°).
+ *
+ * On iOS/Android, the magnetometer Y-axis points toward the top of the device
+ * and X-axis points to the right. When the device faces North:
+ *   magY is max positive, magX is ~0 → atan2(0, +) = 0° ✓
+ * When facing East:
+ *   magX is max positive, magY is ~0 → atan2(+, 0) = 90° ✓
  */
 export function calculateHeading(magX: number, magY: number): number {
-  // atan2(-magX, magY) gives angle from magnetic north (Y-axis) clockwise
-  let rawHeading = Math.atan2(-magX, magY) * (180 / Math.PI);
+  // atan2(magX, magY) gives clockwise angle from North
+  let rawHeading = Math.atan2(magX, magY) * (180 / Math.PI);
   // Normalize to 0-360
   rawHeading = ((rawHeading % 360) + 360) % 360;
-
-  // Apply 180° inversion fix — corrects the reversed compass direction
-  rawHeading = (rawHeading + 180) % 360;
 
   // Low-pass filter for stabilization: smoothed = prev*0.95 + curr*0.05
   if (_prevHeading === null) {
