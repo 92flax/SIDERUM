@@ -357,3 +357,14 @@
 - [x] On onboarding completion: set flag to true, router.replace('/(tabs)')
 - [x] Ensure tab bar is hidden during onboarding screen
 - [x] Remove inline AdeptsSeal rendering from _layout.tsx
+
+## Sanctum Library – Sanity CMS Integration
+
+- [x] Install react-native-markdown-display package
+- [x] Fetch scriptures from Sanity CMS via getScriptures() in sanctum.tsx
+- [x] Group scriptures by level_required in Library section
+- [x] Feature gating: lock icon + greyscale for scriptures above user level
+- [x] Show "Requires Level X" message on locked scripture tap
+- [x] Full-screen modal reader for unlocked scriptures with Markdown rendering
+- [x] Style Markdown reader with Cinzel/JetBrainsMono fonts and dark esoteric theme
+- [x] Integrate Library section under "Library" header in Sanctum screen

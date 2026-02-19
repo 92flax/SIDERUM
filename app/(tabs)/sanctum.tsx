@@ -1,13 +1,14 @@
 // ============================================================
 // ÆONIS – Sanctum Hub (Digital Grimoire)
 // Tile-Hub layout: [Stasis], [Rituals], [Library], [Events]
-// Includes ritual player and catalog sub-views
+// Library fetches scriptures from Sanity CMS with level-gating
 // ============================================================
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Text, View, StyleSheet, FlatList, Platform, Pressable, ScrollView, Dimensions, Alert, Modal } from 'react-native';
+import { Text, View, StyleSheet, FlatList, Platform, Pressable, ScrollView, Dimensions, Alert, Modal, ActivityIndicator } from 'react-native';
 import { Magnetometer, Accelerometer } from 'expo-sensors';
 import * as Haptics from 'expo-haptics';
+import Markdown from 'react-native-markdown-display';
 import { ScreenContainer } from '@/components/screen-container';
 import { HoloPad } from '@/components/holo-pad';
 import { StasisMode } from '@/components/stasis-mode';
@@ -17,13 +18,59 @@ import { Ritual, RitualStep, RitualIntention, RitualTradition } from '@/lib/ritu
 import { useAstroStore } from '@/lib/astro/store';
 import { ELDER_FUTHARK, generateBindruneData } from '@/lib/runes/futhark';
 import { useRuneWalletStore } from '@/lib/store/rune-wallet';
-import { handleRitualCompletion } from '@/lib/ritual/completion-handler';
+import { handleRitualCompletion, loadLocalAnalytics, LEVEL_TITLES } from '@/lib/ritual/completion-handler';
 import { RITUAL_INSTRUCTIONS_MD } from '@/lib/content/local-fallback';
+import { getScriptures, type SanityScripture } from '@/lib/cms/sanity';
 import { useRouter } from 'expo-router';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
 type HubView = 'hub' | 'stasis' | 'catalog' | 'library' | 'player';
+
+// ─── Sanity Block Content → Markdown Converter ──────────────
+function blockContentToMarkdown(content: SanityScripture['content']): string {
+  if (!content || !Array.isArray(content)) return '';
+  return content
+    .map((block) => {
+      if (block._type === 'block' && block.children) {
+        return block.children.map((c) => c.text ?? '').join('');
+      }
+      return '';
+    })
+    .join('\n\n');
+}
+
+// ─── Markdown Styles (Dark Esoteric Theme) ──────────────────
+const mdStyles = StyleSheet.create({
+  body: { color: '#E0E0E0', fontSize: 15, lineHeight: 26, fontFamily: 'JetBrainsMono' },
+  heading1: { fontFamily: 'Cinzel', fontSize: 22, color: '#D4AF37', letterSpacing: 3, marginTop: 24, marginBottom: 12 },
+  heading2: { fontFamily: 'Cinzel', fontSize: 18, color: '#D4AF37', letterSpacing: 2, marginTop: 20, marginBottom: 10 },
+  heading3: { fontFamily: 'Cinzel', fontSize: 15, color: '#C0A040', letterSpacing: 1.5, marginTop: 16, marginBottom: 8 },
+  paragraph: { marginBottom: 12 },
+  strong: { color: '#D4AF37', fontWeight: '700' as const },
+  em: { color: '#9BA1A6', fontStyle: 'italic' as const },
+  blockquote: {
+    backgroundColor: '#D4AF3710', borderLeftColor: '#D4AF37', borderLeftWidth: 3,
+    paddingLeft: 14, paddingVertical: 8, marginVertical: 10, borderRadius: 4,
+  },
+  code_inline: {
+    fontFamily: 'JetBrainsMono', backgroundColor: '#1A1A2E', color: '#00FFFF',
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, fontSize: 13,
+  },
+  code_block: {
+    fontFamily: 'JetBrainsMono', backgroundColor: '#0D0D1A', color: '#00FFFF',
+    padding: 14, borderRadius: 8, fontSize: 13, lineHeight: 22, marginVertical: 10,
+  },
+  fence: {
+    fontFamily: 'JetBrainsMono', backgroundColor: '#0D0D1A', color: '#00FFFF',
+    padding: 14, borderRadius: 8, fontSize: 13, lineHeight: 22, marginVertical: 10,
+  },
+  bullet_list: { marginVertical: 8 },
+  ordered_list: { marginVertical: 8 },
+  list_item: { marginBottom: 6 },
+  hr: { backgroundColor: '#D4AF3730', height: 1, marginVertical: 16 },
+  link: { color: '#00CCCC', textDecorationLine: 'underline' as const },
+});
 
 export default function SanctumScreen() {
   const rituals = useRitualStore((s) => s.rituals);
@@ -55,6 +102,13 @@ export default function SanctumScreen() {
   const [completionResult, setCompletionResult] = useState<{ xpAwarded: number; leveledUp: boolean } | null>(null);
   const chartData = useAstroStore((s) => s.chartData);
 
+  // ─── Library State (Sanity CMS) ───────────────────────────
+  const [scriptures, setScriptures] = useState<SanityScripture[]>([]);
+  const [scripturesLoading, setScripturesLoading] = useState(false);
+  const [scripturesError, setScripturesError] = useState<string | null>(null);
+  const [selectedScripture, setSelectedScripture] = useState<SanityScripture | null>(null);
+  const [userLevel, setUserLevel] = useState(0);
+
   const filteredRituals = useMemo(() => {
     return rituals.filter(r => {
       if (filterIntention !== 'All' && (r as any).intention !== filterIntention) return false;
@@ -67,6 +121,54 @@ export default function SanctumScreen() {
   const TRADITIONS: Array<RitualTradition | 'All'> = ['All', 'Golden Dawn', 'Thelema', 'Norse', 'Hermetic'];
 
   useEffect(() => { loadRituals(); }, []);
+
+  // Load user level from local analytics
+  useEffect(() => {
+    loadLocalAnalytics().then((analytics) => {
+      setUserLevel(analytics.levelRank);
+    });
+  }, [hubView]); // Refresh when returning to hub
+
+  // Fetch scriptures from Sanity when entering library view
+  useEffect(() => {
+    if (hubView !== 'library') return;
+    let cancelled = false;
+    setScripturesLoading(true);
+    setScripturesError(null);
+
+    getScriptures()
+      .then((data) => {
+        if (!cancelled) {
+          setScriptures(data);
+          setScripturesLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setScripturesError('Failed to load scriptures. Check your connection.');
+          setScripturesLoading(false);
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [hubView]);
+
+  // Group scriptures by level_required
+  const groupedScriptures = useMemo(() => {
+    const groups: Record<number, SanityScripture[]> = {};
+    for (const s of scriptures) {
+      const lvl = s.level_required ?? 0;
+      if (!groups[lvl]) groups[lvl] = [];
+      groups[lvl].push(s);
+    }
+    return Object.entries(groups)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([level, items]) => ({
+        level: Number(level),
+        title: LEVEL_TITLES[Number(level)] ?? `Level ${level}`,
+        items,
+      }));
+  }, [scriptures]);
 
   // Auto-switch to player when ritual starts
   useEffect(() => {
@@ -169,22 +271,36 @@ export default function SanctumScreen() {
     setHubView(view);
   }, []);
 
+  const handleScriptureTap = useCallback((scripture: SanityScripture) => {
+    const requiredLevel = scripture.level_required ?? 0;
+    if (userLevel < requiredLevel) {
+      const levelTitle = LEVEL_TITLES[requiredLevel] ?? `Level ${requiredLevel}`;
+      if (Platform.OS !== ('web' as string)) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(
+        'Scripture Locked',
+        `Requires ${levelTitle} (Level ${requiredLevel}).\nYour current level: ${userLevel}.`,
+        [{ text: 'Understood', style: 'default' }]
+      );
+      return;
+    }
+    if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedScripture(scripture);
+  }, [userLevel]);
+
   // ==========================================
   // STASIS MODE
   // ==========================================
   if (hubView === 'stasis') {
     return (
       <StasisMode
-        onComplete={(result) => {
-          // Result handled by StasisMode internally
-        }}
+        onComplete={(result) => {}}
         onClose={() => setHubView('hub')}
       />
     );
   }
 
   // ==========================================
-  // LIBRARY VIEW
+  // LIBRARY VIEW (Sanity CMS Scriptures)
   // ==========================================
   if (hubView === 'library') {
     return (
@@ -197,49 +313,187 @@ export default function SanctumScreen() {
             <Text style={styles.backBtnText}>‹ Sanctum</Text>
           </Pressable>
           <Text style={styles.title}>Library</Text>
-          <Text style={styles.subtitle}>Ritual Knowledge Base</Text>
+          <Text style={styles.subtitle}>The Grimoire of Scriptures</Text>
 
-          <FlatList
-            data={rituals}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
+          {/* User Level Indicator */}
+          <View style={styles.levelBadge}>
+            <Text style={styles.levelBadgeText}>
+              Your Level: {userLevel} — {LEVEL_TITLES[userLevel] ?? 'Neophyte'}
+            </Text>
+          </View>
+
+          {/* Loading State */}
+          {scripturesLoading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#D4AF37" />
+              <Text style={styles.loadingText}>Consulting the Archives…</Text>
+            </View>
+          )}
+
+          {/* Error State */}
+          {scripturesError && !scripturesLoading && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorIcon}>⚠</Text>
+              <Text style={styles.errorText}>{scripturesError}</Text>
               <Pressable
                 onPress={() => {
-                  if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setSelectedLibraryRitual(item.id);
+                  setScripturesLoading(true);
+                  setScripturesError(null);
+                  getScriptures()
+                    .then(setScriptures)
+                    .catch(() => setScripturesError('Failed to load scriptures.'))
+                    .finally(() => setScripturesLoading(false));
                 }}
-                style={({ pressed }) => [styles.libraryCard, pressed && { opacity: 0.7 }]}
+                style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
               >
-                <Text style={styles.libraryCardName}>{item.name}</Text>
-                <Text style={styles.libraryCardDesc}>{item.description}</Text>
-                <Text style={styles.libraryCardMeta}>{item.tradition} · {item.steps.length} steps</Text>
+                <Text style={styles.retryBtnText}>Retry</Text>
               </Pressable>
-            )}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
+            </View>
+          )}
 
-          {/* Library Detail Modal */}
-          <Modal visible={!!selectedLibraryRitual} transparent animationType="slide" onRequestClose={() => setSelectedLibraryRitual(null)}>
-            <Pressable style={styles.modalOverlay} onPress={() => setSelectedLibraryRitual(null)}>
-              <Pressable style={styles.modalContent} onPress={() => {}}>
-                <View style={styles.modalHandle} />
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  <Text style={styles.modalTitle}>
-                    {rituals.find(r => r.id === selectedLibraryRitual)?.name ?? 'Ritual'}
+          {/* Empty State */}
+          {!scripturesLoading && !scripturesError && scriptures.length === 0 && (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>📜</Text>
+              <Text style={styles.emptyText}>No scriptures available yet.</Text>
+              <Text style={styles.emptySubtext}>The library awaits its first volumes.</Text>
+            </View>
+          )}
+
+          {/* Grouped Scripture List */}
+          {!scripturesLoading && !scripturesError && scriptures.length > 0 && (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
+              {groupedScriptures.map((group) => {
+                const isGroupLocked = userLevel < group.level;
+                return (
+                  <View key={group.level} style={styles.levelGroup}>
+                    <View style={styles.levelGroupHeader}>
+                      <View style={[styles.levelDot, isGroupLocked && styles.levelDotLocked]} />
+                      <Text style={[styles.levelGroupTitle, isGroupLocked && styles.levelGroupTitleLocked]}>
+                        {group.title}
+                      </Text>
+                      <Text style={styles.levelGroupCount}>
+                        {isGroupLocked ? '🔒' : `${group.items.length}`}
+                      </Text>
+                    </View>
+
+                    {group.items.map((scripture) => {
+                      const isLocked = userLevel < (scripture.level_required ?? 0);
+                      return (
+                        <Pressable
+                          key={scripture._id}
+                          onPress={() => handleScriptureTap(scripture)}
+                          style={({ pressed }) => [
+                            styles.scriptureCard,
+                            isLocked && styles.scriptureCardLocked,
+                            pressed && { opacity: 0.7 },
+                          ]}
+                        >
+                          <View style={styles.scriptureHeader}>
+                            <View style={styles.scriptureTitleRow}>
+                              {isLocked && <Text style={styles.lockIcon}>🔒</Text>}
+                              <Text
+                                style={[styles.scriptureTitle, isLocked && styles.scriptureTitleLocked]}
+                                numberOfLines={1}
+                              >
+                                {scripture.title}
+                              </Text>
+                            </View>
+                            {scripture.category && (
+                              <View style={[styles.categoryTag, isLocked && styles.categoryTagLocked]}>
+                                <Text style={[styles.categoryTagText, isLocked && styles.categoryTagTextLocked]}>
+                                  {scripture.category}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+
+                          {scripture.description && (
+                            <Text
+                              style={[styles.scriptureDesc, isLocked && styles.scriptureDescLocked]}
+                              numberOfLines={2}
+                            >
+                              {scripture.description}
+                            </Text>
+                          )}
+
+                          <View style={styles.scriptureMeta}>
+                            {scripture.author && (
+                              <Text style={[styles.scriptureAuthor, isLocked && { color: '#333' }]}>
+                                by {scripture.author}
+                              </Text>
+                            )}
+                            {isLocked && (
+                              <Text style={styles.requiresLevel}>
+                                Requires Level {scripture.level_required}
+                              </Text>
+                            )}
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          {/* Scripture Reader Modal */}
+          <Modal
+            visible={!!selectedScripture}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setSelectedScripture(null)}
+          >
+            <View style={styles.readerOverlay}>
+              <View style={styles.readerContent}>
+                <View style={styles.readerHandle} />
+
+                {/* Reader Header */}
+                <View style={styles.readerHeader}>
+                  <Text style={styles.readerTitle} numberOfLines={2}>
+                    {selectedScripture?.title}
                   </Text>
-                  <Text style={styles.libraryMd}>
-                    {RITUAL_INSTRUCTIONS_MD[selectedLibraryRitual ?? ''] ?? 'No extended instructions available for this ritual.'}
-                  </Text>
-                </ScrollView>
-                <Pressable
-                  onPress={() => setSelectedLibraryRitual(null)}
-                  style={({ pressed }) => [styles.modalCloseBtn, pressed && { opacity: 0.8 }]}
+                  {selectedScripture?.author && (
+                    <Text style={styles.readerAuthor}>by {selectedScripture.author}</Text>
+                  )}
+                  {selectedScripture?.category && (
+                    <View style={styles.readerCategoryTag}>
+                      <Text style={styles.readerCategoryText}>{selectedScripture.category}</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.readerDivider} />
+
+                {/* Markdown Content */}
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.readerBody}
                 >
-                  <Text style={styles.modalCloseBtnText}>Close</Text>
+                  {selectedScripture?.content ? (
+                    <Markdown style={mdStyles}>
+                      {blockContentToMarkdown(selectedScripture.content)}
+                    </Markdown>
+                  ) : (
+                    <View style={styles.noContentContainer}>
+                      <Text style={styles.noContentIcon}>📜</Text>
+                      <Text style={styles.noContentText}>
+                        This scripture's content has not yet been transcribed.
+                      </Text>
+                    </View>
+                  )}
+                </ScrollView>
+
+                {/* Close Button */}
+                <Pressable
+                  onPress={() => setSelectedScripture(null)}
+                  style={({ pressed }) => [styles.readerCloseBtn, pressed && { opacity: 0.8 }]}
+                >
+                  <Text style={styles.readerCloseBtnText}>Close</Text>
                 </Pressable>
-              </Pressable>
-            </Pressable>
+              </View>
+            </View>
           </Modal>
         </View>
       </ScreenContainer>
@@ -666,8 +920,8 @@ export default function SanctumScreen() {
           >
             <Text style={styles.tileIcon}>📖</Text>
             <Text style={styles.tileTitle}>Library</Text>
-            <Text style={styles.tileDesc}>Knowledge Base</Text>
-            <Text style={styles.tileMeta}>Study ritual texts</Text>
+            <Text style={styles.tileDesc}>Grimoire of Scriptures</Text>
+            <Text style={styles.tileMeta}>Sanity CMS · Live</Text>
           </Pressable>
 
           {/* Forge/Runes Tile */}
@@ -750,6 +1004,87 @@ const styles = StyleSheet.create({
   quickBtnIcon: { fontSize: 16, color: '#D4AF37' },
   quickBtnText: { fontSize: 13, color: '#E0E0E0' },
 
+  // Level Badge
+  levelBadge: {
+    alignSelf: 'center', backgroundColor: '#D4AF3710', borderWidth: 1, borderColor: '#D4AF3730',
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 6, marginTop: 12,
+  },
+  levelBadgeText: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#D4AF37', letterSpacing: 1 },
+
+  // Loading / Error / Empty
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 60 },
+  loadingText: { fontFamily: 'Cinzel', fontSize: 14, color: '#6B6B6B', marginTop: 16, letterSpacing: 2 },
+  errorContainer: { alignItems: 'center', paddingTop: 40 },
+  errorIcon: { fontSize: 32, color: '#EF4444' },
+  errorText: { fontSize: 14, color: '#EF4444', marginTop: 8, textAlign: 'center' },
+  retryBtn: {
+    backgroundColor: '#D4AF37', borderRadius: 16, paddingHorizontal: 24, paddingVertical: 10, marginTop: 16,
+  },
+  retryBtnText: { color: '#050505', fontSize: 13, fontWeight: '700' },
+  emptyContainer: { alignItems: 'center', paddingTop: 60 },
+  emptyIcon: { fontSize: 48 },
+  emptyText: { fontFamily: 'Cinzel', fontSize: 16, color: '#6B6B6B', marginTop: 12, letterSpacing: 2 },
+  emptySubtext: { fontSize: 13, color: '#4A4A4A', marginTop: 4 },
+
+  // Level Groups
+  levelGroup: { marginTop: 20 },
+  levelGroupHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  levelDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D4AF37' },
+  levelDotLocked: { backgroundColor: '#333' },
+  levelGroupTitle: { fontFamily: 'Cinzel', fontSize: 14, color: '#D4AF37', letterSpacing: 2, flex: 1 },
+  levelGroupTitleLocked: { color: '#555' },
+  levelGroupCount: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B' },
+
+  // Scripture Cards
+  scriptureCard: {
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
+    borderRadius: 12, padding: 14, marginBottom: 8,
+  },
+  scriptureCardLocked: { borderColor: '#111', opacity: 0.5 },
+  scriptureHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  scriptureTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
+  lockIcon: { fontSize: 14 },
+  scriptureTitle: { fontFamily: 'Cinzel', fontSize: 14, color: '#D4AF37', letterSpacing: 1, flex: 1 },
+  scriptureTitleLocked: { color: '#555' },
+  categoryTag: {
+    backgroundColor: '#3B82F615', borderWidth: 1, borderColor: '#3B82F630',
+    borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, marginLeft: 8,
+  },
+  categoryTagLocked: { backgroundColor: '#11111180', borderColor: '#222' },
+  categoryTagText: { fontFamily: 'JetBrainsMono', fontSize: 9, color: '#3B82F6', letterSpacing: 0.5 },
+  categoryTagTextLocked: { color: '#444' },
+  scriptureDesc: { fontSize: 12, color: '#6B6B6B', marginTop: 6, lineHeight: 18 },
+  scriptureDescLocked: { color: '#333' },
+  scriptureMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
+  scriptureAuthor: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#4A4A4A' },
+  requiresLevel: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#EF4444', letterSpacing: 0.5 },
+
+  // Scripture Reader Modal
+  readerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'flex-end' },
+  readerContent: {
+    backgroundColor: '#0A0A0F', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24, paddingBottom: 40, maxHeight: '92%',
+    borderTopWidth: 1, borderColor: '#D4AF3730',
+  },
+  readerHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#D4AF3740', alignSelf: 'center', marginBottom: 20 },
+  readerHeader: { alignItems: 'center', marginBottom: 8 },
+  readerTitle: { fontFamily: 'Cinzel', fontSize: 20, color: '#D4AF37', textAlign: 'center', letterSpacing: 2 },
+  readerAuthor: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', marginTop: 4 },
+  readerCategoryTag: {
+    backgroundColor: '#3B82F615', borderWidth: 1, borderColor: '#3B82F630',
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3, marginTop: 8,
+  },
+  readerCategoryText: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#3B82F6', letterSpacing: 1 },
+  readerDivider: { height: 1, backgroundColor: '#D4AF3720', marginVertical: 16 },
+  readerBody: { paddingBottom: 20 },
+  noContentContainer: { alignItems: 'center', paddingVertical: 40 },
+  noContentIcon: { fontSize: 40 },
+  noContentText: { fontFamily: 'Cinzel', fontSize: 14, color: '#6B6B6B', marginTop: 12, textAlign: 'center', letterSpacing: 1 },
+  readerCloseBtn: {
+    backgroundColor: '#D4AF37', borderRadius: 20, paddingVertical: 14, alignItems: 'center', marginTop: 12,
+  },
+  readerCloseBtnText: { color: '#050505', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
+
   // Selected Ritual
   selectedRitual: {
     backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#D4AF3740',
@@ -816,17 +1151,7 @@ const styles = StyleSheet.create({
   ritualTagTradition: { backgroundColor: '#00FFFF10', borderColor: '#00FFFF30' },
   ritualTagText: { fontFamily: 'JetBrainsMono', fontSize: 9, color: '#D4AF37', letterSpacing: 0.5 },
 
-  // Library
-  libraryCard: {
-    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#1A1A1A',
-    borderRadius: 12, padding: 14, marginBottom: 8,
-  },
-  libraryCardName: { fontFamily: 'Cinzel', fontSize: 15, color: '#D4AF37', letterSpacing: 1 },
-  libraryCardDesc: { fontSize: 12, color: '#6B6B6B', marginTop: 4, lineHeight: 18 },
-  libraryCardMeta: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#4A4A4A', marginTop: 6 },
-  libraryMd: { fontSize: 13, color: '#E0E0E0', lineHeight: 22, marginTop: 12 },
-
-  // Modal
+  // Modal (old library)
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
   modalContent: {
     backgroundColor: '#0D0D0D', borderTopLeftRadius: 24, borderTopRightRadius: 24,
@@ -859,6 +1184,7 @@ const styles = StyleSheet.create({
   compassHint: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 4 },
   simBtn: { backgroundColor: '#1A1A1A', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   simBtnText: { fontSize: 12, color: '#E0E0E0' },
+
   actionBadge: {
     alignSelf: 'center', borderWidth: 1, borderRadius: 6,
     paddingHorizontal: 12, paddingVertical: 4, marginTop: 12,
