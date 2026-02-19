@@ -1,6 +1,5 @@
 // ============================================================
-// ÆONIS – Tab Layout (Digital Grimoire)
-// 5 Tabs: Home, Sanctum, Radar, Path, Adept
+// ÆONIS – Tab Layout (4 Tabs: Home, Sanctum, Radar, Adept)
 // Uses lucide-react-native for crisp icons
 // ============================================================
 
@@ -56,13 +55,6 @@ export default function TabLayout() {
         options={{
           title: "Radar",
           tabBarIcon: ({ color }) => <LucideIcon name="compass" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="path"
-        options={{
-          title: "Path",
-          tabBarIcon: ({ color }) => <LucideIcon name="trophy" size={22} color={color} />,
         }}
       />
       <Tabs.Screen

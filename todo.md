@@ -331,3 +331,21 @@
 - [x] Step 1: magic_name + birth date input
 - [x] Step 2: Forging signature rune
 - [x] Step 3: Save and complete
+
+## Navigation Cleanup & Sanity CMS
+
+### Module 1: Navigation Cleanup
+- [x] Remove "The Path" tab/screen from bottom navigation
+- [x] Delete app/(tabs)/path.tsx file
+- [x] Clean up any references to path.tsx in _layout.tsx and other files
+- [x] Mandatory onboarding: check hasCompletedOnboarding via AsyncStorage on app launch
+- [x] If not completed, route to onboarding screens before showing main app
+- [x] Store hasCompletedOnboarding flag after onboarding completion
+
+### Module 2: Sanity CMS Integration
+- [x] Install @sanity/client package
+- [x] Create lib/cms/sanity.ts with client config (projectId: cq6s3aun, dataset: production)
+- [x] Write getLevels() GROQ query with TypeScript types
+- [x] Write getRituals() GROQ query with TypeScript types
+- [x] Write getScriptures() GROQ query with TypeScript types
+- [x] Write getEvents() GROQ query with TypeScript types
