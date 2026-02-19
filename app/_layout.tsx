@@ -1,6 +1,6 @@
 import "@/global.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, router, useRootNavigationState } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -17,18 +17,15 @@ import {
 import type { EdgeInsets, Metrics, Rect } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
 import { useProStore } from "@/lib/store/pro-store";
 import { useRuneWalletStore } from '@/lib/store/rune-wallet';
 import { useNatalStore } from '@/lib/store/natal-store';
-import { AdeptsSeal } from '@/components/adepts-seal';
 
 SplashScreen.preventAutoHideAsync();
 
-const ONBOARDING_KEY = '@aeonis_onboarding_complete';
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 
@@ -42,7 +39,8 @@ export default function RootLayout() {
 
   const [insets, setInsets] = useState<EdgeInsets>(initialInsets);
   const [frame, setFrame] = useState<Rect>(initialFrame);
-  const [showSeal, setShowSeal] = useState<boolean | null>(null);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   // Load custom fonts
   const [fontsLoaded, fontError] = useFonts({
@@ -50,22 +48,19 @@ export default function RootLayout() {
     JetBrainsMono: "https://fonts.gstatic.com/s/jetbrainsmono/v18/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxTOlOV.ttf",
   });
 
-  // Check seal/onboarding status
+  // Check onboarding status on mount
   useEffect(() => {
-    const checkSeal = async () => {
+    const checkOnboarding = async () => {
       try {
         await useRuneWalletStore.getState().loadWallet();
         const { hasCompletedSeal } = useRuneWalletStore.getState();
-        setShowSeal(!hasCompletedSeal);
+        setNeedsOnboarding(!hasCompletedSeal);
       } catch {
-        setShowSeal(true);
+        setNeedsOnboarding(true);
       }
+      setOnboardingChecked(true);
     };
-    checkSeal();
-  }, []);
-
-  const handleSealComplete = useCallback(async () => {
-    setShowSeal(false);
+    checkOnboarding();
   }, []);
 
   // Initialize Manus runtime for cookie injection from parent container
@@ -79,11 +74,21 @@ export default function RootLayout() {
     useNatalStore.getState().loadNatalData();
   }, []);
 
+  // Hide splash screen once fonts and onboarding check are ready
   useEffect(() => {
-    if ((fontsLoaded || fontError) && showSeal !== null) {
+    if ((fontsLoaded || fontError) && onboardingChecked) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError, showSeal]);
+  }, [fontsLoaded, fontError, onboardingChecked]);
+
+  // Route to onboarding if needed, once navigation is ready
+  const navigationState = useRootNavigationState();
+  useEffect(() => {
+    if (!onboardingChecked || !navigationState?.key) return;
+    if (needsOnboarding) {
+      router.replace('/onboarding');
+    }
+  }, [onboardingChecked, needsOnboarding, navigationState?.key]);
 
   const handleSafeAreaUpdate = useCallback((metrics: Metrics) => {
     setInsets(metrics.insets);
@@ -127,19 +132,26 @@ export default function RootLayout() {
     return null;
   }
 
-  if (showSeal === null) {
+  if (!onboardingChecked) {
     return null;
   }
 
-  // Adept's Seal onboarding wraps the entire app
-  const mainContent = showSeal ? (
-    <AdeptsSeal onComplete={handleSealComplete} />
-  ) : (
+  const mainContent = (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen
+              name="onboarding"
+              options={{
+                headerShown: false,
+                // Prevent swipe-back gesture on onboarding
+                gestureEnabled: false,
+                // Full screen presentation, no tab bar
+                presentation: 'fullScreenModal',
+              }}
+            />
             <Stack.Screen name="oauth/callback" />
           </Stack>
           <StatusBar style="light" />

@@ -349,3 +349,11 @@
 - [x] Write getRituals() GROQ query with TypeScript types
 - [x] Write getScriptures() GROQ query with TypeScript types
 - [x] Write getEvents() GROQ query with TypeScript types
+
+## Onboarding Routing Fix
+
+- [x] Create app/onboarding.tsx as proper Expo Router route (no tab bar)
+- [x] Refactor app/_layout.tsx: check hasCompletedOnboarding, use router.replace('/onboarding') if false
+- [x] On onboarding completion: set flag to true, router.replace('/(tabs)')
+- [x] Ensure tab bar is hidden during onboarding screen
+- [x] Remove inline AdeptsSeal rendering from _layout.tsx
