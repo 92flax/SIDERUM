@@ -412,3 +412,26 @@
 - [x] Deep black background (#050505 or #0D0D0D)
 - [x] Minimal thin-bordered controls for rhythm selector (no clunky buttons)
 - [x] Premium dark esoteric ÆONIS aesthetic throughout
+
+## Stasis UI Critical Fix (Senior UI/UX Review)
+
+### 1. Rhythm Selector – Elegant & Dark
+- [x] Horizontally scrollable Rhythm Cards/Pills with esoteric styling
+- [x] Unselected: bg #0D0D0D, border #333333, text #6B6B6B (JetBrainsMono)
+- [x] Selected: bg #D4AF3715, border #D4AF37, text #D4AF37 (Cinzel/bold)
+
+### 2. Restore Outer SVG Progress Ring
+- [x] SVG Circle progress ring around central breathing circle using react-native-svg
+- [x] Animated strokeDashoffset via reanimated createAnimatedComponent
+- [x] Ring fills 0%→100% matching exact phase duration (e.g. 4s inhale = 4s fill)
+- [x] Ring resets and refills on each phase transition (Inhale→Hold→Exhale→Void)
+
+### 3. Constrain Circle Scale
+- [x] Base scale 1.0, max inhale scale 1.1-1.15 (NOT 1.3)
+- [x] Ensure no overlap with phase text, rhythm menu, or intent indicators
+- [x] Adequate padding/margin around SVG container
+
+### 4. Central Phase Text
+- [x] Phase text (Inhale/Hold/Exhale/Void) perfectly centered inside ring
+- [x] Cinzel font, white/gold color
+- [x] Smooth crossfade on phase transitions
