@@ -3,7 +3,7 @@
 // XP Bar Header, Magic Name, Stasis Buff, Power Rating
 // ============================================================
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Text, View, ScrollView, StyleSheet, Platform, Pressable, Dimensions, TextInput, Modal } from 'react-native';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
@@ -28,6 +28,8 @@ import {
   xpForNextLevel, xpForCurrentLevel,
 } from '@/lib/ritual/completion-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAGIC_NAME_KEY = '@aeonis_magic_name';
@@ -90,6 +92,20 @@ export default function HomeScreen() {
       setStasisBuffActive(minutesSince <= 60);
     }
   }, [analytics]);
+
+  // Stasis Buff Aura animation
+  const auraOpacity = useSharedValue(0.3);
+  useEffect(() => {
+    if (stasisBuffActive) {
+      auraOpacity.value = withRepeat(
+        withTiming(0.8, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
+        -1, true,
+      );
+    } else {
+      auraOpacity.value = withTiming(0, { duration: 300 });
+    }
+  }, [stasisBuffActive]);
+  const auraAnimStyle = useAnimatedStyle(() => ({ opacity: auraOpacity.value }));
 
   // GPS location on mount
   useEffect(() => {
@@ -238,8 +254,23 @@ export default function HomeScreen() {
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* ===== XP BAR HEADER ===== */}
-        <View style={styles.xpHeader}>
+        {/* ===== XP BAR HEADER with Stasis Aura ===== */}
+        <View style={styles.xpHeaderWrapper}>
+          {stasisBuffActive && (
+            <Animated.View style={[styles.auraContainer, auraAnimStyle]}>
+              <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+                <Defs>
+                  <RadialGradient id="auraGrad" cx="50%" cy="50%" rx="50%" ry="50%">
+                    <Stop offset="0%" stopColor="#00FFFF" stopOpacity="0.4" />
+                    <Stop offset="60%" stopColor="#0088AA" stopOpacity="0.15" />
+                    <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
+                  </RadialGradient>
+                </Defs>
+                <Circle cx="50%" cy="50%" r="50%" fill="url(#auraGrad)" />
+              </Svg>
+            </Animated.View>
+          )}
+          <View style={styles.xpHeader}>
           <View style={styles.xpHeaderTop}>
             <View>
               <Text style={styles.xpMagicName}>
@@ -265,6 +296,7 @@ export default function HomeScreen() {
                 <Text style={styles.stasisBuffText}>STASIS ×1.15</Text>
               </View>
             )}
+          </View>
           </View>
         </View>
 
@@ -790,9 +822,17 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 },
 
   // XP Header
+  xpHeaderWrapper: {
+    position: 'relative' as const, marginBottom: 8,
+  },
+  auraContainer: {
+    ...StyleSheet.absoluteFillObject,
+    top: -20, bottom: -20, left: -20, right: -20,
+    zIndex: 0,
+  },
   xpHeader: {
     backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#D4AF3730',
-    borderRadius: 14, padding: 14, marginBottom: 8,
+    borderRadius: 14, padding: 14, zIndex: 1,
   },
   xpHeaderTop: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',

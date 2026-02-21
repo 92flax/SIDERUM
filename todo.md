@@ -384,3 +384,21 @@
 - [x] Create AstralPotencyCard with PLANET_COLORS background glow (0.2 opacity animated)
 - [x] Display synthesized Headline and Message from engine
 - [x] Quick Action button linking to recommended ritual
+
+## Advanced Stasis & Ritual Intent
+
+### Task 1: Advanced Fluid Stasis
+- [x] Add breathingRhythm GROQ query to Sanity CMS client (id, name, inhale, holdIn, exhale, holdOut, colorHex)
+- [x] Breathing rhythm picker UI on Stasis screen
+- [x] Ritual Priming: selector to attune Stasis glow to a ritual's planetary/elemental color
+- [x] Fluid reanimated animations: smooth circle expand/contract synced to breath phases (no setInterval)
+- [x] Nebula Glow: radial gradient behind circle, intensifies on inhale, dims on exhale
+- [x] Smooth circle fill animation (not ticking)
+- [x] Phase text fade in/out in center (Inhale/Hold/Exhale/Void) with Cinzel font
+- [x] Haptics: Light impact on every breath phase transition
+- [x] Stasis Accumulator Buff: track daily completion, show glowing SVG aura on Home if active
+
+### Task 2: Conditional Ritual Intent
+- [x] Add supportsIntent boolean to Sanity ritual GROQ query
+- [x] Conditionally render BANISH/INVOKE toggle only if currentRitual.supportsIntent === true
+- [x] Hide intent section entirely if supportsIntent is false, proceed automatically

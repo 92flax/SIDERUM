@@ -528,53 +528,55 @@ export default function SanctumScreen() {
                 {currentRitual.tradition} · {currentRitual.steps.length} steps
               </Text>
 
-              {/* Intent Toggle */}
-              <View style={styles.intentSection}>
-                <Text style={styles.intentLabel}>RITUAL INTENT</Text>
-                <View style={styles.intentToggle}>
-                  <Pressable
-                    onPress={() => {
-                      if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      setIntent('BANISH');
-                    }}
-                    style={({ pressed }) => [
-                      styles.intentBtn,
-                      intent === 'BANISH' && styles.intentBtnActiveBanish,
-                      pressed && { opacity: 0.8 },
-                    ]}
-                  >
-                    <Text style={[styles.intentBtnText, intent === 'BANISH' && styles.intentBtnTextActive]}>
-                      ↑ BANISH
-                    </Text>
-                    <Text style={[styles.intentBtnSub, intent === 'BANISH' && { color: '#00CCCC' }]}>
-                      Earth → Spirit
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      setIntent('INVOKE');
-                    }}
-                    style={({ pressed }) => [
-                      styles.intentBtn,
-                      intent === 'INVOKE' && styles.intentBtnActiveInvoke,
-                      pressed && { opacity: 0.8 },
-                    ]}
-                  >
-                    <Text style={[styles.intentBtnText, intent === 'INVOKE' && styles.intentBtnTextActive]}>
-                      ↓ INVOKE
-                    </Text>
-                    <Text style={[styles.intentBtnSub, intent === 'INVOKE' && { color: '#CC8800' }]}>
-                      Spirit → Earth
-                    </Text>
-                  </Pressable>
+              {/* Intent Toggle – only shown if ritual supports it */}
+              {(currentRitual.supportsIntent !== false) && (
+                <View style={styles.intentSection}>
+                  <Text style={styles.intentLabel}>RITUAL INTENT</Text>
+                  <View style={styles.intentToggle}>
+                    <Pressable
+                      onPress={() => {
+                        if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setIntent('BANISH');
+                      }}
+                      style={({ pressed }) => [
+                        styles.intentBtn,
+                        intent === 'BANISH' && styles.intentBtnActiveBanish,
+                        pressed && { opacity: 0.8 },
+                      ]}
+                    >
+                      <Text style={[styles.intentBtnText, intent === 'BANISH' && styles.intentBtnTextActive]}>
+                        ↑ BANISH
+                      </Text>
+                      <Text style={[styles.intentBtnSub, intent === 'BANISH' && { color: '#00CCCC' }]}>
+                        Earth → Spirit
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setIntent('INVOKE');
+                      }}
+                      style={({ pressed }) => [
+                        styles.intentBtn,
+                        intent === 'INVOKE' && styles.intentBtnActiveInvoke,
+                        pressed && { opacity: 0.8 },
+                      ]}
+                    >
+                      <Text style={[styles.intentBtnText, intent === 'INVOKE' && styles.intentBtnTextActive]}>
+                        ↓ INVOKE
+                      </Text>
+                      <Text style={[styles.intentBtnSub, intent === 'INVOKE' && { color: '#CC8800' }]}>
+                        Spirit → Earth
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <Text style={styles.intentHint}>
+                    {intent === 'BANISH'
+                      ? 'Banishing: Clears unwanted energies. Start from Lower-Left (Earth) vertex.'
+                      : 'Invoking: Draws energy inward. Start from Top (Spirit) vertex.'}
+                  </Text>
                 </View>
-                <Text style={styles.intentHint}>
-                  {intent === 'BANISH'
-                    ? 'Banishing: Clears unwanted energies. Start from Lower-Left (Earth) vertex.'
-                    : 'Invoking: Draws energy inward. Start from Top (Spirit) vertex.'}
-                </Text>
-              </View>
+              )}
 
               <Pressable
                 onPress={() => {

@@ -29,6 +29,7 @@ export interface Ritual {
   tradition: string;
   intention?: RitualIntention;
   traditionTag?: RitualTradition;
+  supportsIntent?: boolean;
   steps: RitualStep[];
 }
 

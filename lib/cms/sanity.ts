@@ -29,6 +29,18 @@ export interface SanityLevelConfig {
   color?: string;
 }
 
+/** Breathing rhythm from CMS */
+export interface SanityBreathingRhythm {
+  _id: string;
+  _type: 'breathingRhythm';
+  name: string;
+  inhale: number;
+  holdIn: number;
+  exhale: number;
+  holdOut: number;
+  colorHex?: string;
+}
+
 /** Ritual from CMS */
 export interface SanityRitual {
   _id: string;
@@ -44,6 +56,7 @@ export interface SanityRitual {
   planetary_association?: string;
   tags?: string[];
   audio_url?: string;
+  supportsIntent?: boolean;
   image?: {
     asset: { _ref: string; url?: string };
   };
@@ -133,6 +146,7 @@ export async function getRituals(): Promise<SanityRitual[]> {
     planetary_association,
     tags,
     audio_url,
+    supportsIntent,
     "image": image { asset-> { _ref, url } }
   }`;
 
@@ -224,6 +238,31 @@ export async function getActiveEvents(): Promise<SanityEvent[]> {
     return results;
   } catch (error) {
     console.warn('[Sanity] Failed to fetch active events:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch all breathing rhythms from CMS.
+ * Used to populate the Stasis breathing pattern picker.
+ */
+export async function getBreathingRhythms(): Promise<SanityBreathingRhythm[]> {
+  const query = `*[_type == "breathingRhythm"] | order(name asc) {
+    _id,
+    _type,
+    name,
+    inhale,
+    holdIn,
+    exhale,
+    holdOut,
+    colorHex
+  }`;
+
+  try {
+    const results = await client.fetch<SanityBreathingRhythm[]>(query);
+    return results;
+  } catch (error) {
+    console.warn('[Sanity] Failed to fetch breathing rhythms:', error);
     return [];
   }
 }
