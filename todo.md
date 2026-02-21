@@ -435,3 +435,17 @@
 - [x] Phase text (Inhale/Hold/Exhale/Void) perfectly centered inside ring
 - [x] Cinzel font, white/gold color
 - [x] Smooth crossfade on phase transitions
+
+## Stasis Menu Redesign v5
+
+### Setup Screen
+- [x] Dropdown selector for breathing patterns (replaces horizontal pill cards)
+- [x] Toggle/slider for "Prime for Ritual" – when OFF, ritual list is completely hidden
+- [x] When toggle ON, show ritual selection below
+- [x] Clean, minimal, dark esoteric aesthetic
+
+### Active Session Screen
+- [x] Breathing circle: grows on Inhale, holds on Hold, shrinks on Exhale
+- [x] Circle must NOT overlap any info or control elements
+- [x] SVG progress ring fills fluidly (not ticking) per phase duration
+- [x] Ring resets on each phase transition
