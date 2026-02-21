@@ -402,3 +402,13 @@
 - [x] Add supportsIntent boolean to Sanity ritual GROQ query
 - [x] Conditionally render BANISH/INVOKE toggle only if currentRitual.supportsIntent === true
 - [x] Hide intent section entirely if supportsIntent is false, proceed automatically
+
+## Stasis Circle Restoration & Upgrade
+
+- [x] Restore central breathing circle (250px ring, borderWidth 2, no solid background)
+- [x] Fluid scale animation: Inhale → scale 1.3, Exhale → scale 0.8 with Easing.inOut
+- [x] Phase text (Inhale/Hold/Exhale/Void) centered inside ring, Cinzel font, white/gold
+- [x] Nebula Glow: Animated.View behind circle, radial gradient matching rhythm color, opacity synced to breath
+- [x] Deep black background (#050505 or #0D0D0D)
+- [x] Minimal thin-bordered controls for rhythm selector (no clunky buttons)
+- [x] Premium dark esoteric ÆONIS aesthetic throughout

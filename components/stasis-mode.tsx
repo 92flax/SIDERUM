@@ -1,18 +1,18 @@
 // ============================================================
-// ÆONIS – Stasis Mode "Deepening" v2
-// Fluid 60fps reanimated animations, CMS breathing rhythms,
-// Ritual Priming, Circular Phase Ring, Haptics
+// ÆONIS – Stasis Mode v3 "Breathing Circle Restoration"
+// Prominent 250px breathing ring, fluid 60fps reanimated scale
+// animation (1.3x inhale, 0.8x exhale), nebula glow, CMS
+// breathing rhythms, ritual priming, haptics
 // ============================================================
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Text, View, StyleSheet, Pressable, Platform, Dimensions, ScrollView,
 } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Stop, G, RadialGradient } from 'react-native-svg';
 import Animated, {
-  useSharedValue, useAnimatedStyle, useAnimatedProps,
-  withTiming, withRepeat, withSequence, Easing, runOnJS,
-  cancelAnimation, useDerivedValue, interpolate,
+  useSharedValue, useAnimatedStyle,
+  withTiming, withSequence, Easing, runOnJS,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -21,17 +21,16 @@ import { getBreathingRhythms, type SanityBreathingRhythm } from '@/lib/cms/sanit
 import { useRitualStore } from '@/lib/ritual/store';
 
 const { width: SW } = Dimensions.get('window');
-const RING_SIZE = Math.min(SW * 0.72, 300);
-const RING_CENTER = RING_SIZE / 2;
-const RING_RADIUS = RING_SIZE / 2 - 16;
-const RING_STROKE = 8;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-// Animated SVG components
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+// ─── Central Breathing Circle Dimensions ────────────────────
+const CIRCLE_SIZE = 250;
+const CIRCLE_BORDER = 2;
 
 // Default breathing patterns (fallback if CMS is empty)
-const DEFAULT_RHYTHMS: Array<{ id: string; name: string; inhale: number; holdIn: number; exhale: number; holdOut: number; colorHex: string }> = [
+const DEFAULT_RHYTHMS: Array<{
+  id: string; name: string; inhale: number; holdIn: number;
+  exhale: number; holdOut: number; colorHex: string;
+}> = [
   { id: 'box', name: 'Box Breathing', inhale: 4, holdIn: 4, exhale: 4, holdOut: 4, colorHex: '#9CA3AF' },
   { id: 'calm', name: '4-7-8 Calm', inhale: 4, holdIn: 7, exhale: 8, holdOut: 0, colorHex: '#3B82F6' },
   { id: 'power', name: 'Power Breath', inhale: 6, holdIn: 2, exhale: 6, holdOut: 2, colorHex: '#EF4444' },
@@ -58,7 +57,9 @@ interface StasisModeProps {
 
 type BreathPhase = 'Inhale' | 'Hold' | 'Exhale' | 'Void';
 
-function getTierInfo(totalSeconds: number): { color: string; gradStart: string; gradEnd: string; label: string } {
+function getTierInfo(totalSeconds: number): {
+  color: string; gradStart: string; gradEnd: string; label: string;
+} {
   if (totalSeconds >= TIER_GOLD) {
     return { color: '#FFD700', gradStart: '#D4AF37', gradEnd: '#FFD700', label: 'XP BOOST' };
   }
@@ -91,12 +92,13 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
   const [showSetup, setShowSetup] = useState(true);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const phaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ─── Reanimated shared values ──────────────────────────────
-  const breathScale = useSharedValue(0.65);
-  const nebulaOpacity = useSharedValue(0.15);
-  const ringProgress = useSharedValue(0);
+  // Breathing circle scale: 1.3 on inhale, 0.8 on exhale
+  const breathScale = useSharedValue(0.8);
+  // Nebula glow opacity: synced with breath (bright on inhale, dim on exhale)
+  const nebulaOpacity = useSharedValue(0.1);
+  // Phase text fade
   const phaseTextOpacity = useSharedValue(1);
 
   // ─── Computed values ───────────────────────────────────────
@@ -119,7 +121,9 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
   const tier = getTierInfo(totalSeconds);
 
   // Override glow color if ritual is primed
-  const glowColor = primedRitualId ? (RITUAL_COLORS[primedRitualId] ?? tier.color) : tier.color;
+  const glowColor = primedRitualId
+    ? (RITUAL_COLORS[primedRitualId] ?? rhythm.colorHex)
+    : rhythm.colorHex;
 
   // ─── Fetch CMS rhythms ────────────────────────────────────
   useEffect(() => {
@@ -132,75 +136,68 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
   const startBreathCycle = useCallback(() => {
     const { inhale, holdIn, exhale, holdOut } = rhythm;
 
-    // Phase 1: Inhale (expand)
-    breathScale.value = withTiming(1.0, {
-      duration: inhale * 1000,
-      easing: Easing.inOut(Easing.sin),
-    });
-    nebulaOpacity.value = withTiming(0.6, {
-      duration: inhale * 1000,
-      easing: Easing.inOut(Easing.sin),
-    });
-
-    // Phase text fade
-    phaseTextOpacity.value = withSequence(
-      withTiming(0, { duration: 150 }),
-      withTiming(1, { duration: 300 }),
-    );
-
     const triggerHaptic = () => {
       if (Platform.OS !== 'web') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     };
 
-    // Schedule phase transitions
+    const fadePhaseText = () => {
+      phaseTextOpacity.value = withSequence(
+        withTiming(0, { duration: 120 }),
+        withTiming(1, { duration: 250 }),
+      );
+    };
+
+    // Phase 1: INHALE → scale up to 1.3, nebula brightens
+    breathScale.value = withTiming(1.3, {
+      duration: inhale * 1000,
+      easing: Easing.inOut(Easing.ease),
+    });
+    nebulaOpacity.value = withTiming(0.55, {
+      duration: inhale * 1000,
+      easing: Easing.inOut(Easing.ease),
+    });
+    fadePhaseText();
+
+    // Schedule phase transitions via setTimeout (JS thread)
     const t1 = inhale * 1000;
     const t2 = t1 + holdIn * 1000;
     const t3 = t2 + exhale * 1000;
     const t4 = t3 + holdOut * 1000;
 
-    // Hold In
+    // Phase 2: HOLD IN
     const timer1 = setTimeout(() => {
       runOnJS(setCurrentPhase)('Hold');
       runOnJS(triggerHaptic)();
-      phaseTextOpacity.value = withSequence(
-        withTiming(0, { duration: 150 }),
-        withTiming(1, { duration: 300 }),
-      );
+      fadePhaseText();
     }, t1);
 
-    // Exhale (contract)
+    // Phase 3: EXHALE → scale down to 0.8, nebula dims
     const timer2 = setTimeout(() => {
       runOnJS(setCurrentPhase)('Exhale');
       runOnJS(triggerHaptic)();
-      breathScale.value = withTiming(0.65, {
+      breathScale.value = withTiming(0.8, {
         duration: exhale * 1000,
-        easing: Easing.inOut(Easing.sin),
+        easing: Easing.inOut(Easing.ease),
       });
-      nebulaOpacity.value = withTiming(0.15, {
+      nebulaOpacity.value = withTiming(0.1, {
         duration: exhale * 1000,
-        easing: Easing.inOut(Easing.sin),
+        easing: Easing.inOut(Easing.ease),
       });
-      phaseTextOpacity.value = withSequence(
-        withTiming(0, { duration: 150 }),
-        withTiming(1, { duration: 300 }),
-      );
+      fadePhaseText();
     }, t2);
 
-    // Void (hold out)
+    // Phase 4: VOID (hold out)
     const timer3 = setTimeout(() => {
       if (holdOut > 0) {
         runOnJS(setCurrentPhase)('Void');
         runOnJS(triggerHaptic)();
-        phaseTextOpacity.value = withSequence(
-          withTiming(0, { duration: 150 }),
-          withTiming(1, { duration: 300 }),
-        );
+        fadePhaseText();
       }
     }, t3);
 
-    // Next cycle
+    // Next cycle start
     const timer4 = setTimeout(() => {
       runOnJS(setCurrentPhase)('Inhale');
       runOnJS(triggerHaptic)();
@@ -249,42 +246,22 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
     };
   }, [isActive]);
 
-  // ─── Ring progress animation (smooth per cycle) ───────────
-  useEffect(() => {
-    if (!isActive) return;
-
-    // Animate ring from 0→1 over each cycle, repeating
-    ringProgress.value = 0;
-    ringProgress.value = withRepeat(
-      withTiming(1, {
-        duration: cycleDuration * 1000,
-        easing: Easing.linear,
-      }),
-      -1, // infinite
-      false,
-    );
-
-    return () => {
-      cancelAnimation(ringProgress);
-    };
-  }, [isActive, cycleDuration]);
-
   // ─── Animated styles ──────────────────────────────────────
-  const breathAnimStyle = useAnimatedStyle(() => ({
+
+  // Central breathing circle: fluid scale 0.8 → 1.3
+  const breathCircleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: breathScale.value }],
   }));
 
-  const nebulaAnimStyle = useAnimatedStyle(() => ({
+  // Nebula glow: opacity synced with breath, also scales with breath
+  const nebulaGlowStyle = useAnimatedStyle(() => ({
     opacity: nebulaOpacity.value,
     transform: [{ scale: breathScale.value }],
   }));
 
-  const phaseTextAnimStyle = useAnimatedStyle(() => ({
+  // Phase text fade
+  const phaseTextStyle = useAnimatedStyle(() => ({
     opacity: phaseTextOpacity.value,
-  }));
-
-  const ringAnimProps = useAnimatedProps(() => ({
-    strokeDashoffset: RING_CIRCUMFERENCE * (1 - ringProgress.value),
   }));
 
   // ─── Handlers ─────────────────────────────────────────────
@@ -297,9 +274,8 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
     setTotalSeconds(0);
     setCycleCount(0);
     setCurrentPhase('Inhale');
-    breathScale.value = 0.65;
-    nebulaOpacity.value = 0.15;
-    ringProgress.value = 0;
+    breathScale.value = 0.8;
+    nebulaOpacity.value = 0.1;
   }, []);
 
   const handleStop = useCallback(async () => {
@@ -307,7 +283,6 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     setIsActive(false);
-    cancelAnimation(ringProgress);
     cancelAnimation(breathScale);
     cancelAnimation(nebulaOpacity);
 
@@ -331,32 +306,38 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
     const resTier = getTierInfo(totalSeconds);
     return (
       <View style={styles.container}>
-        <View style={[styles.resultCard, { borderColor: resTier.color + '40' }]}>
+        <View style={[styles.resultCard, { borderColor: resTier.color + '30' }]}>
           <Text style={[styles.resultTitle, { color: resTier.color }]}>Stasis Complete</Text>
           <Text style={styles.resultDuration}>{totalMinutes} min · {cycleCount} cycles</Text>
           <View style={styles.resultDivider} />
           <Text style={styles.resultXp}>+{result.xpAwarded} Spirit XP</Text>
           {result.buffActive && (
-            <View style={[styles.buffBadge, { borderColor: '#3B82F640' }]}>
+            <View style={[styles.buffBadge, { borderColor: '#3B82F630' }]}>
               <Text style={[styles.buffText, { color: '#3B82F6' }]}>STASIS BUFF ACTIVE</Text>
               <Text style={styles.buffDesc}>×1.15 XP for 60 minutes</Text>
             </View>
           )}
           {totalSeconds >= TIER_GOLD && (
-            <View style={[styles.buffBadge, { borderColor: '#FFD70040' }]}>
+            <View style={[styles.buffBadge, { borderColor: '#FFD70030' }]}>
               <Text style={[styles.buffText, { color: '#FFD700' }]}>GOLD SESSION</Text>
               <Text style={styles.buffDesc}>Deep meditation achieved</Text>
             </View>
           )}
           {primedRitualId && (
-            <View style={[styles.buffBadge, { borderColor: (RITUAL_COLORS[primedRitualId] ?? '#D4AF37') + '40' }]}>
+            <View style={[styles.buffBadge, { borderColor: (RITUAL_COLORS[primedRitualId] ?? '#D4AF37') + '30' }]}>
               <Text style={[styles.buffText, { color: RITUAL_COLORS[primedRitualId] ?? '#D4AF37' }]}>PRIMED</Text>
-              <Text style={styles.buffDesc}>Attuned for {rituals.find((r) => r.id === primedRitualId)?.name ?? 'ritual'}</Text>
+              <Text style={styles.buffDesc}>
+                Attuned for {rituals.find((r) => r.id === primedRitualId)?.name ?? 'ritual'}
+              </Text>
             </View>
           )}
           <Pressable
             onPress={onClose}
-            style={({ pressed }) => [styles.closeBtn, { backgroundColor: resTier.color }, pressed && { opacity: 0.8 }]}
+            style={({ pressed }) => [
+              styles.closeBtn,
+              { backgroundColor: resTier.color },
+              pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
+            ]}
           >
             <Text style={styles.closeBtnText}>Return</Text>
           </Pressable>
@@ -371,12 +352,16 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
   if (showSetup && !isActive) {
     return (
       <View style={styles.container}>
-        <Text style={styles.setupTitle}>Stasis Configuration</Text>
+        <Text style={styles.setupTitle}>STASIS</Text>
         <Text style={styles.setupSubtitle}>Attune your breath and intent</Text>
 
         {/* Breathing Rhythm Picker */}
         <Text style={styles.sectionLabel}>BREATHING PATTERN</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rhythmRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.rhythmRow}
+        >
           {allRhythms.map((r, i) => {
             const isSelected = i === selectedRhythmIndex;
             return (
@@ -388,7 +373,7 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
                 }}
                 style={[
                   styles.rhythmCard,
-                  isSelected && { borderColor: r.colorHex + '80', backgroundColor: r.colorHex + '10' },
+                  isSelected && { borderColor: r.colorHex + '60', backgroundColor: r.colorHex + '08' },
                 ]}
               >
                 <View style={[styles.rhythmDot, { backgroundColor: r.colorHex }]} />
@@ -402,8 +387,12 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
         </ScrollView>
 
         {/* Ritual Priming Selector */}
-        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>PRIME FOR RITUAL (optional)</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rhythmRow}>
+        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>PRIME FOR RITUAL</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.rhythmRow}
+        >
           <Pressable
             onPress={() => {
               setPrimedRitualId(null);
@@ -411,7 +400,7 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
             }}
             style={[
               styles.primeCard,
-              !primedRitualId && { borderColor: '#6B6B6B80', backgroundColor: '#6B6B6B10' },
+              !primedRitualId && { borderColor: '#6B6B6B40', backgroundColor: '#6B6B6B08' },
             ]}
           >
             <Text style={[styles.primeName, !primedRitualId && { color: '#E0E0E0' }]}>None</Text>
@@ -428,7 +417,7 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
                 }}
                 style={[
                   styles.primeCard,
-                  isSelected && { borderColor: color + '80', backgroundColor: color + '10' },
+                  isSelected && { borderColor: color + '60', backgroundColor: color + '08' },
                 ]}
               >
                 <View style={[styles.rhythmDot, { backgroundColor: color }]} />
@@ -441,7 +430,10 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
         {/* Start Button */}
         <Pressable
           onPress={handleStart}
-          style={({ pressed }) => [styles.startBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+          style={({ pressed }) => [
+            styles.startBtn,
+            pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
+          ]}
         >
           <Text style={styles.startBtnText}>Begin Stasis</Text>
         </Pressable>
@@ -459,123 +451,56 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
   // ==========================================
   // MAIN TIMER SCREEN (Active Session)
   // ==========================================
+  const phaseLabel =
+    currentPhase === 'Inhale' ? 'Inhale' :
+    currentPhase === 'Hold' ? 'Hold' :
+    currentPhase === 'Exhale' ? 'Exhale' : 'Void';
+
   return (
     <View style={styles.container}>
-      {/* Timer display */}
+      {/* ─── Timer Display ─────────────────────────────────── */}
       <Text style={[styles.timerLabel, { color: tier.color }]}>
-        {String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:{String(totalSeconds % 60).padStart(2, '0')}
+        {String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:
+        {String(totalSeconds % 60).padStart(2, '0')}
       </Text>
       <View style={styles.tierRow}>
         <View style={[styles.tierDot, { backgroundColor: tier.color }]} />
-        <Text style={[styles.tierLabel, { color: tier.color }]}>{tier.label}</Text>
+        <Text style={[styles.tierText, { color: tier.color }]}>{tier.label}</Text>
       </View>
       <Text style={styles.cycleLabel}>{cycleCount} cycles · {rhythm.name}</Text>
 
-      {/* Circular Phase Ring with Nebula Glow */}
-      <View style={styles.ringContainer}>
-        {/* Nebula glow (radial gradient effect) */}
-        <Animated.View
-          style={[
-            styles.nebulaGlow,
-            { backgroundColor: glowColor + '20' },
-            nebulaAnimStyle,
-          ]}
-        />
-        <Animated.View
-          style={[
-            styles.nebulaInner,
-            { backgroundColor: glowColor + '10' },
-            nebulaAnimStyle,
-          ]}
-        />
+      {/* ─── Central Breathing Circle Area ─────────────────── */}
+      <View style={styles.breathArea}>
+        {/* Layer 1: Nebula Glow (behind everything) */}
+        <Animated.View style={[styles.nebulaOuter, { backgroundColor: glowColor }, nebulaGlowStyle]} />
+        <Animated.View style={[styles.nebulaMiddle, { backgroundColor: glowColor }, nebulaGlowStyle]} />
+        <Animated.View style={[styles.nebulaInner, { backgroundColor: glowColor }, nebulaGlowStyle]} />
 
-        <Svg width={RING_SIZE} height={RING_SIZE}>
-          <Defs>
-            <LinearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor={tier.gradStart} />
-              <Stop offset="1" stopColor={tier.gradEnd} />
-            </LinearGradient>
-          </Defs>
+        {/* Layer 2: The Breathing Ring (250px, thin border, scales 0.8→1.3) */}
+        <Animated.View style={[styles.breathRing, { borderColor: glowColor + '80' }, breathCircleStyle]}>
+          {/* Inner subtle fill for depth */}
+          <View style={[styles.breathRingInnerFill, { backgroundColor: glowColor + '06' }]} />
 
-          {/* Background ring */}
-          <Circle
-            cx={RING_CENTER}
-            cy={RING_CENTER}
-            r={RING_RADIUS}
-            stroke="#1A1A1A"
-            strokeWidth={RING_STROKE}
-            fill="none"
-          />
-
-          {/* Progress ring (smooth animated) */}
-          <AnimatedCircle
-            cx={RING_CENTER}
-            cy={RING_CENTER}
-            r={RING_RADIUS}
-            stroke="url(#ringGrad)"
-            strokeWidth={RING_STROKE}
-            fill="none"
-            strokeDasharray={`${RING_CIRCUMFERENCE}`}
-            animatedProps={ringAnimProps}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${RING_CENTER} ${RING_CENTER})`}
-          />
-
-          {/* Phase markers */}
-          {(() => {
-            const phases = [
-              { frac: 0, label: 'IN' },
-              { frac: rhythm.inhale / cycleDuration, label: 'H' },
-              { frac: (rhythm.inhale + rhythm.holdIn) / cycleDuration, label: 'EX' },
-              { frac: (rhythm.inhale + rhythm.holdIn + rhythm.exhale) / cycleDuration, label: 'V' },
-            ];
-            return phases.map((p, i) => {
-              const angle = p.frac * 2 * Math.PI - Math.PI / 2;
-              const mx = RING_CENTER + RING_RADIUS * Math.cos(angle);
-              const my = RING_CENTER + RING_RADIUS * Math.sin(angle);
-              const isCurrentPhaseMarker =
-                (i === 0 && currentPhase === 'Inhale') ||
-                (i === 1 && currentPhase === 'Hold') ||
-                (i === 2 && currentPhase === 'Exhale') ||
-                (i === 3 && currentPhase === 'Void');
-              return (
-                <Circle
-                  key={i}
-                  cx={mx}
-                  cy={my}
-                  r={isCurrentPhaseMarker ? 6 : 4}
-                  fill={isCurrentPhaseMarker ? tier.color : '#333'}
-                />
-              );
-            });
-          })()}
-        </Svg>
-
-        {/* Center content (breathing circle + phase text) */}
-        <Animated.View style={[styles.centerContent, breathAnimStyle]}>
-          <View style={[styles.breathCircle, { borderColor: glowColor + '40' }]}>
-            <Animated.Text style={[styles.phaseText, { color: glowColor }, phaseTextAnimStyle]}>
-              {currentPhase === 'Inhale' ? 'Inhale...' :
-               currentPhase === 'Hold' ? 'Hold...' :
-               currentPhase === 'Exhale' ? 'Exhale...' : 'Void...'}
-            </Animated.Text>
-          </View>
+          {/* Phase text centered inside ring */}
+          <Animated.Text style={[styles.phaseText, { color: glowColor }, phaseTextStyle]}>
+            {phaseLabel}
+          </Animated.Text>
         </Animated.View>
       </View>
 
-      {/* Phase indicator pills */}
+      {/* ─── Phase Indicator Pills ─────────────────────────── */}
       <View style={styles.phaseRow}>
         {(['Inhale', 'Hold', 'Exhale', 'Void'] as BreathPhase[]).map((p) => (
           <View
             key={p}
             style={[
               styles.phasePill,
-              currentPhase === p && { borderColor: tier.color, backgroundColor: tier.color + '10' },
+              currentPhase === p && { borderColor: glowColor + '50', backgroundColor: glowColor + '0A' },
             ]}
           >
             <Text style={[
-              styles.phaseLabel,
-              currentPhase === p && { color: tier.color },
+              styles.phasePillText,
+              currentPhase === p && { color: glowColor },
             ]}>
               {p}
             </Text>
@@ -583,29 +508,33 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
         ))}
       </View>
 
-      {/* Tier progress indicators */}
+      {/* ─── Tier Progress ─────────────────────────────────── */}
       <View style={styles.tierProgress}>
         <View style={styles.tierStep}>
           <View style={[styles.tierStepDot, { backgroundColor: '#9CA3AF' }]} />
-          <Text style={[styles.tierStepLabel, totalSeconds < TIER_BLUE && { color: '#9CA3AF' }]}>Silver</Text>
+          <Text style={[styles.tierStepLabel, totalSeconds < TIER_BLUE && { color: '#555' }]}>Silver</Text>
         </View>
-        <View style={[styles.tierLine, totalSeconds >= TIER_BLUE && { backgroundColor: '#3B82F640' }]} />
+        <View style={[styles.tierLine, totalSeconds >= TIER_BLUE && { backgroundColor: '#3B82F630' }]} />
         <View style={styles.tierStep}>
-          <View style={[styles.tierStepDot, { backgroundColor: totalSeconds >= TIER_BLUE ? '#3B82F6' : '#333' }]} />
+          <View style={[styles.tierStepDot, { backgroundColor: totalSeconds >= TIER_BLUE ? '#3B82F6' : '#222' }]} />
           <Text style={[styles.tierStepLabel, totalSeconds >= TIER_BLUE && { color: '#3B82F6' }]}>Blue 5m</Text>
         </View>
-        <View style={[styles.tierLine, totalSeconds >= TIER_GOLD && { backgroundColor: '#FFD70040' }]} />
+        <View style={[styles.tierLine, totalSeconds >= TIER_GOLD && { backgroundColor: '#FFD70030' }]} />
         <View style={styles.tierStep}>
-          <View style={[styles.tierStepDot, { backgroundColor: totalSeconds >= TIER_GOLD ? '#FFD700' : '#333' }]} />
+          <View style={[styles.tierStepDot, { backgroundColor: totalSeconds >= TIER_GOLD ? '#FFD700' : '#222' }]} />
           <Text style={[styles.tierStepLabel, totalSeconds >= TIER_GOLD && { color: '#FFD700' }]}>Gold 15m</Text>
         </View>
       </View>
 
-      {/* Controls */}
+      {/* ─── Controls ──────────────────────────────────────── */}
       <View style={styles.controls}>
         <Pressable
           onPress={handleStop}
-          style={({ pressed }) => [styles.stopBtn, { borderColor: tier.color }, pressed && { opacity: 0.8 }]}
+          style={({ pressed }) => [
+            styles.stopBtn,
+            { borderColor: tier.color + '60' },
+            pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
+          ]}
         >
           <Text style={[styles.stopBtnText, { color: tier.color }]}>End Session</Text>
         </Pressable>
@@ -613,7 +542,6 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
         <Pressable
           onPress={() => {
             setIsActive(false);
-            cancelAnimation(ringProgress);
             cancelAnimation(breathScale);
             cancelAnimation(nebulaOpacity);
             onClose();
@@ -627,182 +555,326 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
   );
 }
 
+// ─── Styles ─────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
-    flex: 1, backgroundColor: '#050505', alignItems: 'center',
-    justifyContent: 'center', padding: 24,
+    flex: 1,
+    backgroundColor: '#050505',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
   },
 
-  // Setup screen
+  // ── Setup Screen ──────────────────────────────────────────
   setupTitle: {
-    fontFamily: 'Cinzel', fontSize: 24, color: '#D4AF37', letterSpacing: 3,
+    fontFamily: 'Cinzel',
+    fontSize: 28,
+    color: '#D4AF37',
+    letterSpacing: 6,
   },
   setupSubtitle: {
-    fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', marginTop: 6, letterSpacing: 1,
+    fontFamily: 'JetBrainsMono',
+    fontSize: 11,
+    color: '#555',
+    marginTop: 8,
+    letterSpacing: 2,
   },
   sectionLabel: {
-    fontFamily: 'JetBrainsMono', fontSize: 9, color: '#6B6B6B',
-    letterSpacing: 3, marginTop: 28, marginBottom: 10, alignSelf: 'flex-start',
+    fontFamily: 'JetBrainsMono',
+    fontSize: 9,
+    color: '#555',
+    letterSpacing: 3,
+    marginTop: 32,
+    marginBottom: 10,
+    alignSelf: 'flex-start',
   },
   rhythmRow: {
-    flexDirection: 'row', gap: 10, paddingVertical: 4,
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 4,
   },
   rhythmCard: {
-    borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 14,
-    paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center',
-    backgroundColor: '#0A0A0A', minWidth: 100,
+    borderWidth: 1,
+    borderColor: '#1A1A1A',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#0A0A0A',
+    minWidth: 100,
   },
-  rhythmDot: { width: 8, height: 8, borderRadius: 4, marginBottom: 6 },
+  rhythmDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginBottom: 6,
+  },
   rhythmName: {
-    fontFamily: 'Cinzel', fontSize: 11, color: '#6B6B6B', letterSpacing: 1,
+    fontFamily: 'Cinzel',
+    fontSize: 10,
+    color: '#555',
+    letterSpacing: 1,
   },
   rhythmPattern: {
-    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#444', marginTop: 3,
+    fontFamily: 'JetBrainsMono',
+    fontSize: 9,
+    color: '#333',
+    marginTop: 3,
   },
   primeCard: {
-    borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 14,
-    paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center',
-    backgroundColor: '#0A0A0A', minWidth: 80,
+    borderWidth: 1,
+    borderColor: '#1A1A1A',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#0A0A0A',
+    minWidth: 80,
   },
   primeName: {
-    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', letterSpacing: 1,
+    fontFamily: 'JetBrainsMono',
+    fontSize: 10,
+    color: '#555',
+    letterSpacing: 1,
   },
 
-  // Timer
+  // ── Timer Display ─────────────────────────────────────────
   timerLabel: {
-    fontFamily: 'JetBrainsMono', fontSize: 36, letterSpacing: 4,
+    fontFamily: 'JetBrainsMono',
+    fontSize: 36,
+    letterSpacing: 4,
   },
   tierRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
   },
-  tierDot: { width: 6, height: 6, borderRadius: 3 },
-  tierLabel: {
-    fontFamily: 'JetBrainsMono', fontSize: 9, letterSpacing: 3,
+  tierDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  tierText: {
+    fontFamily: 'JetBrainsMono',
+    fontSize: 9,
+    letterSpacing: 3,
   },
   cycleLabel: {
-    fontFamily: 'JetBrainsMono', fontSize: 11, color: '#6B6B6B', marginTop: 2,
+    fontFamily: 'JetBrainsMono',
+    fontSize: 11,
+    color: '#555',
+    marginTop: 2,
   },
 
-  // Ring
-  ringContainer: {
-    width: RING_SIZE + 60, height: RING_SIZE + 60,
-    alignItems: 'center', justifyContent: 'center', marginTop: 24,
+  // ── Central Breathing Circle ──────────────────────────────
+  breathArea: {
+    width: CIRCLE_SIZE + 80,
+    height: CIRCLE_SIZE + 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 28,
+    marginBottom: 8,
   },
-  nebulaGlow: {
+
+  // Nebula glow layers (concentric circles behind the ring)
+  nebulaOuter: {
     position: 'absolute',
-    width: RING_SIZE + 50,
-    height: RING_SIZE + 50,
-    borderRadius: (RING_SIZE + 50) / 2,
+    width: CIRCLE_SIZE + 70,
+    height: CIRCLE_SIZE + 70,
+    borderRadius: (CIRCLE_SIZE + 70) / 2,
+  },
+  nebulaMiddle: {
+    position: 'absolute',
+    width: CIRCLE_SIZE + 40,
+    height: CIRCLE_SIZE + 40,
+    borderRadius: (CIRCLE_SIZE + 40) / 2,
   },
   nebulaInner: {
     position: 'absolute',
-    width: RING_SIZE + 20,
-    height: RING_SIZE + 20,
-    borderRadius: (RING_SIZE + 20) / 2,
-  },
-  centerContent: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  breathCircle: {
-    width: RING_SIZE * 0.55,
-    height: RING_SIZE * 0.55,
-    borderRadius: RING_SIZE * 0.275,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0A0A0A80',
-  },
-  phaseText: {
-    fontFamily: 'Cinzel', fontSize: 16, letterSpacing: 3,
+    width: CIRCLE_SIZE + 15,
+    height: CIRCLE_SIZE + 15,
+    borderRadius: (CIRCLE_SIZE + 15) / 2,
   },
 
-  // Phase pills
+  // The breathing ring itself: 250px, thin border, NO solid background
+  breathRing: {
+    width: CIRCLE_SIZE,
+    height: CIRCLE_SIZE,
+    borderRadius: CIRCLE_SIZE / 2,
+    borderWidth: CIRCLE_BORDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // No backgroundColor – just the ring border
+  },
+  breathRingInnerFill: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: CIRCLE_SIZE / 2,
+  },
+
+  // Phase text inside the ring
+  phaseText: {
+    fontFamily: 'Cinzel',
+    fontSize: 22,
+    letterSpacing: 5,
+    textTransform: 'uppercase',
+  },
+
+  // ── Phase Pills ───────────────────────────────────────────
   phaseRow: {
-    flexDirection: 'row', gap: 10, marginTop: 20,
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
   },
   phasePill: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
-    borderWidth: 1, borderColor: '#1A1A1A',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#151515',
   },
-  phaseLabel: {
-    fontFamily: 'JetBrainsMono', fontSize: 9, color: '#6B6B6B', letterSpacing: 1,
+  phasePillText: {
+    fontFamily: 'JetBrainsMono',
+    fontSize: 9,
+    color: '#444',
+    letterSpacing: 1,
   },
 
-  // Tier progress
+  // ── Tier Progress ─────────────────────────────────────────
   tierProgress: {
-    flexDirection: 'row', alignItems: 'center', marginTop: 16, gap: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+    gap: 4,
   },
-  tierStep: { alignItems: 'center', gap: 3 },
-  tierStepDot: { width: 8, height: 8, borderRadius: 4 },
+  tierStep: {
+    alignItems: 'center',
+    gap: 3,
+  },
+  tierStepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
   tierStepLabel: {
-    fontFamily: 'JetBrainsMono', fontSize: 8, color: '#333', letterSpacing: 1,
+    fontFamily: 'JetBrainsMono',
+    fontSize: 8,
+    color: '#333',
+    letterSpacing: 1,
   },
   tierLine: {
-    width: 32, height: 1, backgroundColor: '#1A1A1A',
+    width: 32,
+    height: 1,
+    backgroundColor: '#151515',
   },
 
-  // Controls
+  // ── Controls ──────────────────────────────────────────────
   controls: {
-    marginTop: 28, alignItems: 'center', gap: 12,
+    marginTop: 24,
+    alignItems: 'center',
+    gap: 10,
   },
   startBtn: {
-    backgroundColor: '#D4AF37', paddingHorizontal: 40, paddingVertical: 16,
-    borderRadius: 30, marginTop: 32,
+    backgroundColor: '#D4AF37',
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    borderRadius: 30,
+    marginTop: 36,
   },
   startBtnText: {
-    color: '#050505', fontSize: 16, fontWeight: '700', letterSpacing: 2,
+    color: '#050505',
+    fontFamily: 'Cinzel',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 3,
   },
   stopBtn: {
-    borderWidth: 1, paddingHorizontal: 40,
-    paddingVertical: 16, borderRadius: 30,
+    borderWidth: 1,
+    paddingHorizontal: 36,
+    paddingVertical: 14,
+    borderRadius: 30,
   },
   stopBtnText: {
-    fontSize: 16, fontWeight: '700', letterSpacing: 2,
+    fontFamily: 'Cinzel',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 2,
   },
   backBtn: {
-    paddingHorizontal: 24, paddingVertical: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
   },
   backBtnText: {
-    fontSize: 13, color: '#6B6B6B',
+    fontSize: 12,
+    color: '#555',
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 1,
   },
 
-  // Result screen
+  // ── Result Screen ─────────────────────────────────────────
   resultCard: {
-    backgroundColor: '#0D0D0D', borderWidth: 1,
-    borderRadius: 20, padding: 32, alignItems: 'center', maxWidth: 320,
+    backgroundColor: '#0A0A0A',
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    maxWidth: 320,
     width: '100%',
   },
   resultTitle: {
-    fontFamily: 'Cinzel', fontSize: 24, letterSpacing: 3,
+    fontFamily: 'Cinzel',
+    fontSize: 24,
+    letterSpacing: 3,
   },
   resultDuration: {
-    fontFamily: 'JetBrainsMono', fontSize: 14, color: '#6B6B6B', marginTop: 8,
+    fontFamily: 'JetBrainsMono',
+    fontSize: 13,
+    color: '#555',
+    marginTop: 8,
   },
   resultDivider: {
-    width: '100%', height: 1, backgroundColor: '#1A1A1A', marginVertical: 20,
+    width: '100%',
+    height: 1,
+    backgroundColor: '#151515',
+    marginVertical: 20,
   },
   resultXp: {
-    fontFamily: 'JetBrainsMono', fontSize: 20, color: '#22C55E', fontWeight: '700',
+    fontFamily: 'JetBrainsMono',
+    fontSize: 20,
+    color: '#22C55E',
+    fontWeight: '700',
   },
   buffBadge: {
-    marginTop: 12, borderWidth: 1,
-    borderRadius: 12, paddingHorizontal: 16,
-    paddingVertical: 10, alignItems: 'center',
+    marginTop: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    alignItems: 'center',
   },
   buffText: {
-    fontFamily: 'JetBrainsMono', fontSize: 11,
-    letterSpacing: 2, fontWeight: '700',
+    fontFamily: 'JetBrainsMono',
+    fontSize: 10,
+    letterSpacing: 2,
+    fontWeight: '700',
   },
   buffDesc: {
-    fontSize: 11, color: '#6B6B6B', marginTop: 4,
+    fontFamily: 'JetBrainsMono',
+    fontSize: 10,
+    color: '#555',
+    marginTop: 4,
   },
   closeBtn: {
-    marginTop: 24, paddingHorizontal: 32,
-    paddingVertical: 14, borderRadius: 24,
+    marginTop: 24,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 24,
   },
   closeBtnText: {
-    color: '#050505', fontSize: 14, fontWeight: '700', letterSpacing: 1,
+    color: '#050505',
+    fontFamily: 'Cinzel',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
 });
