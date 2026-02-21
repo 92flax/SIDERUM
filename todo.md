@@ -368,3 +368,19 @@
 - [x] Full-screen modal reader for unlocked scriptures with Markdown rendering
 - [x] Style Markdown reader with Cinzel/JetBrainsMono fonts and dark esoteric theme
 - [x] Integrate Library section under "Library" header in Sanctum screen
+
+## Astral Potency Engine
+
+### Engine Logic (lib/astro/potency-engine.ts)
+- [x] Adept Potency Score: (1 + Level/10) * (stasis_active ? 1.5 : 1.0)
+- [x] Rune Synergy: HIGH (1.5x) if rune.planet == currentHour.planet, MED (1.2x) if element match, LOW (1.0x)
+- [x] Collective Boost: globalEvent.active → xpMultiplier
+- [x] Actionable Recommendations: text mapper per planetary hour (Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn)
+- [x] Text Synthesis Templates: PRIO 1 (Global Event), PRIO 2 (High Synergy), PRIO 3 (Standard)
+- [x] UserStatusText: stasis_active → "Your mind is focused" / "A stasis session would optimize your potential"
+
+### UI (Home Screen AstralPotencyCard)
+- [x] Delete old astral potency widget from index.tsx
+- [x] Create AstralPotencyCard with PLANET_COLORS background glow (0.2 opacity animated)
+- [x] Display synthesized Headline and Message from engine
+- [x] Quick Action button linking to recommended ritual

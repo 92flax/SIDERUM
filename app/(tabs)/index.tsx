@@ -18,6 +18,9 @@ import { calculateEventHorizon, getNextMajorEvent, searchEvents, AstroEvent } fr
 import { getExactAspects } from '@/lib/astro/aspects';
 import { PLANET_SYMBOLS, PLANET_COLORS, ZODIAC_SYMBOLS, Planet } from '@/lib/astro/types';
 import { calculatePowerRating, getPowerLabel } from '@/lib/astro/power-rating';
+import { calculateAstralPotency, AstralPotencyReport } from '@/lib/astro/potency-engine';
+import { getActiveEvents, SanityEvent } from '@/lib/cms/sanity';
+import { useRouter } from 'expo-router';
 import { useNatalStore } from '@/lib/store/natal-store';
 import { useRuneWalletStore } from '@/lib/store/rune-wallet';
 import {
@@ -68,13 +71,16 @@ export default function HomeScreen() {
   const [analytics, setAnalytics] = useState<LocalAnalytics | null>(null);
   const [magicName, setMagicName] = useState<string>('');
   const [stasisBuffActive, setStasisBuffActive] = useState(false);
+  const [activeEvents, setActiveEvents] = useState<SanityEvent[]>([]);
+  const router = useRouter();
 
-  // Load analytics and magic name
+  // Load analytics, magic name, and active events
   useEffect(() => {
     loadLocalAnalytics().then(setAnalytics);
     AsyncStorage.getItem(MAGIC_NAME_KEY).then(name => {
       if (name) setMagicName(name);
     });
+    getActiveEvents().then(setActiveEvents).catch(() => {});
   }, []);
 
   // Check stasis buff
@@ -177,6 +183,16 @@ export default function HomeScreen() {
     return getPowerLabel(powerRating.totalScore);
   }, [powerRating]);
 
+  // Astral Potency Engine
+  const potencyReport = useMemo<AstralPotencyReport | null>(() => {
+    if (!chartData) return null;
+    const activeRune = getActiveRune();
+    const currentLevel = analytics?.levelRank ?? 0;
+    return calculateAstralPotency(
+      planetaryHour, currentLevel, stasisBuffActive, activeRune, activeEvents,
+    );
+  }, [chartData, planetaryHour, analytics, stasisBuffActive, activeRuneId, activeEvents]);
+
   const handleProFeature = (featureId: string) => {
     if (!isFeatureUnlocked(featureId)) {
       setPaywallFeature(featureId);
@@ -268,29 +284,110 @@ export default function HomeScreen() {
           <Text style={styles.liveText}>LIVE · Auto-refresh 30s</Text>
         </View>
 
-        {/* ===== Astral Potency Gauge ===== */}
-        {powerRating && (
-          <View style={[styles.powerCard, { borderColor: powerLabel.color + '40' }]}>
-            <Text style={styles.powerHeader}>ASTRAL POTENCY</Text>
-            <View style={styles.powerGaugeRow}>
-              <View style={styles.powerGaugeTrack}>
-                <View
-                  style={[styles.powerGaugeFill, { width: `${powerRating.totalScore}%`, backgroundColor: powerLabel.color }]}
-                />
-              </View>
-              <Text style={[styles.powerPercent, { color: powerLabel.color }]}>
-                {powerRating.totalScore}%
+        {/* ===== Astral Potency Card (Engine-driven) ===== */}
+        {potencyReport && (
+          <View style={[
+            styles.potencyCard,
+            { borderColor: potencyReport.planetColor + '50' },
+          ]}>
+            {/* Animated glow background */}
+            <View style={[
+              styles.potencyGlow,
+              { backgroundColor: potencyReport.planetColor + '08' },
+            ]} />
+
+            {/* Priority badge */}
+            <View style={[
+              styles.potencyBadge,
+              potencyReport.priority === 1 && { backgroundColor: '#EF444420', borderColor: '#EF444460' },
+              potencyReport.priority === 2 && { backgroundColor: '#D4AF3720', borderColor: '#D4AF3760' },
+              potencyReport.priority === 3 && { backgroundColor: potencyReport.planetColor + '15', borderColor: potencyReport.planetColor + '40' },
+            ]}>
+              <Text style={[
+                styles.potencyBadgeText,
+                potencyReport.priority === 1 && { color: '#EF4444' },
+                potencyReport.priority === 2 && { color: '#D4AF37' },
+                potencyReport.priority === 3 && { color: potencyReport.planetColor },
+              ]}>
+                {potencyReport.priority === 1 ? '⚡ COSMIC EVENT' : potencyReport.priority === 2 ? '✦ PERFECT ALIGNMENT' : `☉ HOUR OF ${potencyReport.hourPlanet.toUpperCase()}`}
               </Text>
             </View>
-            <Text style={[styles.powerLabel, { color: powerLabel.color }]}>
-              {powerLabel.label}
+
+            {/* Headline */}
+            <Text style={[styles.potencyHeadline, { color: potencyReport.planetColor }]}>
+              {potencyReport.headline}
             </Text>
-            {powerRating.details.length > 0 && (
-              <View style={styles.powerDetails}>
-                {powerRating.details.slice(0, 4).map((d, i) => (
-                  <Text key={i} style={styles.powerDetail}>{d}</Text>
-                ))}
+
+            {/* Message */}
+            <Text style={styles.potencyMessage}>
+              {potencyReport.message}
+            </Text>
+
+            {/* Potency gauge */}
+            <View style={styles.potencyGaugeRow}>
+              <View style={styles.potencyGaugeTrack}>
+                <View style={[
+                  styles.potencyGaugeFill,
+                  { width: `${potencyReport.potencyScore}%`, backgroundColor: potencyReport.planetColor },
+                ]} />
               </View>
+              <Text style={[styles.potencyPercent, { color: potencyReport.planetColor }]}>
+                {potencyReport.potencyScore}%
+              </Text>
+            </View>
+
+            {/* Breakdown pills */}
+            <View style={styles.potencyPills}>
+              <View style={styles.potencyPill}>
+                <Text style={styles.potencyPillLabel}>Adept</Text>
+                <Text style={[styles.potencyPillValue, { color: '#D4AF37' }]}>
+                  ×{potencyReport.breakdown.adeptPotency.toFixed(1)}
+                </Text>
+              </View>
+              <View style={styles.potencyPill}>
+                <Text style={styles.potencyPillLabel}>Rune</Text>
+                <Text style={[
+                  styles.potencyPillValue,
+                  potencyReport.breakdown.runeSynergy === 'HIGH' && { color: '#22C55E' },
+                  potencyReport.breakdown.runeSynergy === 'MED' && { color: '#3B82F6' },
+                  potencyReport.breakdown.runeSynergy === 'LOW' && { color: '#6B6B6B' },
+                ]}>
+                  {potencyReport.breakdown.runeSynergy}
+                </Text>
+              </View>
+              {potencyReport.breakdown.collectiveBoost > 1 && (
+                <View style={styles.potencyPill}>
+                  <Text style={styles.potencyPillLabel}>Event</Text>
+                  <Text style={[styles.potencyPillValue, { color: '#EF4444' }]}>
+                    ×{potencyReport.breakdown.collectiveBoost}
+                  </Text>
+                </View>
+              )}
+              {potencyReport.breakdown.stasisActive && (
+                <View style={styles.potencyPill}>
+                  <Text style={styles.potencyPillLabel}>Stasis</Text>
+                  <Text style={[styles.potencyPillValue, { color: '#22C55E' }]}>ON</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Quick Action button */}
+            {potencyReport.suggestedRitualId && (
+              <Pressable
+                onPress={() => {
+                  if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  router.push('/(tabs)/sanctum');
+                }}
+                style={({ pressed }) => [
+                  styles.potencyAction,
+                  { borderColor: potencyReport.planetColor + '60' },
+                  pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
+                ]}
+              >
+                <Text style={[styles.potencyActionText, { color: potencyReport.planetColor }]}>
+                  Begin Ritual →
+                </Text>
+              </Pressable>
             )}
           </View>
         )}
@@ -871,15 +968,51 @@ const styles = StyleSheet.create({
   tooltipClose: { backgroundColor: '#D4AF37', borderRadius: 20, paddingVertical: 10, alignItems: 'center', marginTop: 16 },
   tooltipCloseText: { color: '#050505', fontSize: 13, fontWeight: '700' },
 
-  powerCard: { backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 14, padding: 16, marginTop: 12 },
-  powerHeader: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', letterSpacing: 2, marginBottom: 10, textAlign: 'center' },
-  powerGaugeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  powerGaugeTrack: { flex: 1, height: 8, backgroundColor: '#1A1A1A', borderRadius: 4, overflow: 'hidden' },
-  powerGaugeFill: { height: '100%', borderRadius: 4 },
-  powerPercent: { fontFamily: 'JetBrainsMono', fontSize: 18, fontWeight: '700', width: 50, textAlign: 'right' },
-  powerLabel: { fontFamily: 'Cinzel', fontSize: 14, textAlign: 'center', marginTop: 8, letterSpacing: 3 },
-  powerDetails: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#1A1A1A', gap: 3 },
-  powerDetail: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', lineHeight: 16 },
+  // Astral Potency Card
+  potencyCard: {
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderRadius: 16, padding: 18, marginTop: 12,
+    overflow: 'hidden', position: 'relative',
+  },
+  potencyGlow: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16,
+  },
+  potencyBadge: {
+    alignSelf: 'flex-start', borderWidth: 1, borderRadius: 6,
+    paddingHorizontal: 10, paddingVertical: 3, marginBottom: 10,
+  },
+  potencyBadgeText: {
+    fontFamily: 'JetBrainsMono', fontSize: 9, fontWeight: '700', letterSpacing: 2,
+  },
+  potencyHeadline: {
+    fontFamily: 'Cinzel', fontSize: 18, letterSpacing: 2, marginBottom: 8,
+  },
+  potencyMessage: {
+    fontSize: 13, color: '#B0B0B0', lineHeight: 20, marginBottom: 14,
+  },
+  potencyGaugeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  potencyGaugeTrack: { flex: 1, height: 6, backgroundColor: '#1A1A1A', borderRadius: 3, overflow: 'hidden' },
+  potencyGaugeFill: { height: '100%', borderRadius: 3 },
+  potencyPercent: { fontFamily: 'JetBrainsMono', fontSize: 16, fontWeight: '700', width: 46, textAlign: 'right' },
+  potencyPills: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12,
+  },
+  potencyPill: {
+    backgroundColor: '#111', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+  },
+  potencyPillLabel: {
+    fontFamily: 'JetBrainsMono', fontSize: 9, color: '#4A4A4A', letterSpacing: 1,
+  },
+  potencyPillValue: {
+    fontFamily: 'JetBrainsMono', fontSize: 11, fontWeight: '700',
+  },
+  potencyAction: {
+    borderWidth: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center',
+    backgroundColor: '#0A0A0A',
+  },
+  potencyActionText: {
+    fontFamily: 'Cinzel', fontSize: 13, fontWeight: '700', letterSpacing: 2,
+  },
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { fontSize: 16, color: '#E0E0E0' },
