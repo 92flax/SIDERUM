@@ -23,10 +23,15 @@ import { RITUAL_INSTRUCTIONS_MD } from '@/lib/content/local-fallback';
 import { getScriptures, type SanityScripture } from '@/lib/cms/sanity';
 import { ELEMENTS, PLANETS, getSelectionColor, type ElementName, type PlanetName } from '@/lib/ritual/geometry';
 import { useRouter } from 'expo-router';
+import { PostRitualCapture, AstralJournal } from '@/components/astral-journal';
+import { useJournalStore } from '@/lib/journal/store';
+import { calculatePlanetaryHours, calculateMoonPhase } from '@/lib/astro/planetary-hours';
+import { getMajorAspects } from '@/lib/astro/aspects';
+import { PLANET_SYMBOLS } from '@/lib/astro/types';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
-type HubView = 'hub' | 'stasis' | 'catalog' | 'library' | 'player';
+type HubView = 'hub' | 'stasis' | 'catalog' | 'library' | 'player' | 'arsenal' | 'journal';
 
 // ─── Sanity Block Content → Markdown Converter ──────────────
 function blockContentToMarkdown(content: SanityScripture['content']): string {
@@ -96,6 +101,13 @@ export default function SanctumScreen() {
   const ritualsSource = useRitualStore((s) => s.ritualsSource);
   const router = useRouter();
 
+  // Journal store
+  const loadJournalEntries = useJournalStore((s) => s.loadEntries);
+  const setPendingJournalData = useJournalStore((s) => s.setPendingData);
+  const openPostRitualCapture = useJournalStore((s) => s.openPostRitualCapture);
+  const saveAutoJournalEntry = useJournalStore((s) => s.saveAutoEntry);
+  const location = useAstroStore((s) => s.location);
+
   const [hubView, setHubView] = useState<HubView>('hub');
   const [heading, setHeading] = useState(0);
   const accHistoryRef = useRef<Array<{ x: number; y: number; z: number; timestamp: number }>>([]);
@@ -126,7 +138,7 @@ export default function SanctumScreen() {
   const INTENTIONS: Array<RitualIntention | 'All'> = ['All', 'Protection', 'Wealth', 'Healing', 'Wisdom', 'Power', 'Purification'];
   const TRADITIONS: Array<RitualTradition | 'All'> = ['All', 'Golden Dawn', 'Thelema', 'Norse', 'Hermetic'];
 
-  useEffect(() => { loadRituals(); }, []);
+  useEffect(() => { loadRituals(); loadJournalEntries(); }, []);
 
   // Load user level from local analytics
   useEffect(() => {
@@ -250,8 +262,31 @@ export default function SanctumScreen() {
     try {
       const result = await handleRitualCompletion(currentRitual.id);
       setCompletionResult({ xpAwarded: result.xpAwarded, leveledUp: result.leveledUp });
+
+      // Auto-capture journal data
+      const now = new Date();
+      const hourInfo = calculatePlanetaryHours(now, location);
+      const moonInfo = calculateMoonPhase(now);
+      const aspects = chartData?.planets ? getMajorAspects(chartData.planets, 3) : [];
+      const aspectStrings = aspects.slice(0, 8).map(a =>
+        `${PLANET_SYMBOLS[a.planet1] ?? a.planet1} ${a.type === 'Conjunction' ? '☌' : a.type === 'Opposition' ? '☍' : a.type === 'Square' ? '□' : a.type === 'Trine' ? '△' : '⚹'} ${PLANET_SYMBOLS[a.planet2] ?? a.planet2} (${a.orb.toFixed(1)}°)`
+      );
+
+      setPendingJournalData({
+        ritualName: currentRitual.name,
+        ritualId: currentRitual.id,
+        intent: intent ?? 'BANISH',
+        dynamicSelection: selectedDynamicChoice,
+        stepsCompleted: currentRitual.steps.length,
+        totalSteps: currentRitual.steps.length,
+        xpAwarded: result.xpAwarded,
+        rulerOfDay: hourInfo.dayRuler,
+        rulerOfHour: hourInfo.currentHour.planet,
+        moonPhase: moonInfo.phaseName,
+        activeAspects: aspectStrings,
+      });
     } catch {}
-  }, [currentRitual]);
+  }, [currentRitual, intent, selectedDynamicChoice, chartData, location]);
 
   const isLBRP = currentRitual?.id === 'lbrp' || currentRitual?.name?.toLowerCase().includes('lesser banishing');
   const activeRune = useRuneWalletStore((s) => s.getActiveRune());
@@ -785,13 +820,26 @@ export default function SanctumScreen() {
           <Pressable
             onPress={() => {
               if (Platform.OS !== ('web' as string)) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              openPostRitualCapture();
               resetRitual();
               setCompletionResult(null);
               setHubView('hub');
             }}
             style={({ pressed }) => [styles.startBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
           >
-            <Text style={styles.startBtnText}>Return to Sanctum</Text>
+            <Text style={styles.startBtnText}>Open Astral Journal</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              saveAutoJournalEntry();
+              resetRitual();
+              setCompletionResult(null);
+              setHubView('hub');
+            }}
+            style={({ pressed }) => [styles.skipJournalBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.skipJournalBtnText}>Skip Journal</Text>
           </Pressable>
         </View>
       </ScreenContainer>
@@ -979,10 +1027,76 @@ export default function SanctumScreen() {
   }
 
   // ==========================================
+  // ARSENAL VIEW
+  // ==========================================
+  if (hubView === 'arsenal') {
+    return (
+      <ScreenContainer>
+        <View style={styles.container}>
+          <View style={styles.arsenalHeader}>
+            <Pressable onPress={() => setHubView('hub')} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+              <Text style={styles.arsenalBackBtn}>← Sanctum</Text>
+            </Pressable>
+            <Text style={styles.arsenalTitle}>Arsenal</Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+            {/* Forge Tile */}
+            <Pressable
+              onPress={() => {
+                if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                router.push('/(tabs)/runes');
+              }}
+              style={({ pressed }) => [styles.arsenalCard, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+            >
+              <Text style={styles.arsenalCardIcon}>✦</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.arsenalCardTitle}>Forge</Text>
+                <Text style={styles.arsenalCardDesc}>Create Bindrunes · Rune Workshop</Text>
+              </View>
+              <Text style={styles.arsenalCardArrow}>›</Text>
+            </Pressable>
+
+            {/* Astral Journal Tile */}
+            <Pressable
+              onPress={() => {
+                if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setHubView('journal');
+              }}
+              style={({ pressed }) => [styles.arsenalCard, styles.arsenalCardJournal, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+            >
+              <Text style={styles.arsenalCardIcon}>☽</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.arsenalCardTitle}>Astral Journal</Text>
+                <Text style={styles.arsenalCardDesc}>Ritual diary · Statistics · Insights</Text>
+              </View>
+              <Text style={styles.arsenalCardArrow}>›</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  // ==========================================
+  // ASTRAL JOURNAL VIEW
+  // ==========================================
+  if (hubView === 'journal') {
+    return (
+      <ScreenContainer>
+        <AstralJournal onBack={() => setHubView('arsenal')} />
+        <PostRitualCapture />
+      </ScreenContainer>
+    );
+  }
+
+  // ==========================================
   // HUB VIEW (Tile Layout)
   // ==========================================
   return (
     <ScreenContainer>
+      <PostRitualCapture />
       <ScrollView contentContainerStyle={styles.hubContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Sanctum</Text>
         <Text style={styles.subtitle}>Your Sacred Space</Text>
@@ -1022,18 +1136,15 @@ export default function SanctumScreen() {
             <Text style={styles.tileMeta}>Sanity CMS · Live</Text>
           </Pressable>
 
-          {/* Forge/Runes Tile */}
+          {/* Arsenal Tile */}
           <Pressable
-            onPress={() => {
-              if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push('/(tabs)/runes');
-            }}
+            onPress={() => handleTilePress('arsenal')}
             style={({ pressed }) => [styles.tile, styles.tileForge, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
           >
-            <Text style={styles.tileIcon}>✦</Text>
-            <Text style={styles.tileTitle}>Forge</Text>
-            <Text style={styles.tileDesc}>Create Bindrunes</Text>
-            <Text style={styles.tileMeta}>Rune Workshop</Text>
+            <Text style={styles.tileIcon}>⚔</Text>
+            <Text style={styles.tileTitle}>Arsenal</Text>
+            <Text style={styles.tileDesc}>Forge & Journal</Text>
+            <Text style={styles.tileMeta}>Tools & Records</Text>
           </Pressable>
         </View>
 
@@ -1355,4 +1466,29 @@ const styles = StyleSheet.create({
   dynamicPillText: {
     fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B',
   },
+
+  // Arsenal
+  arsenalHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: '#1A1A1A',
+  },
+  arsenalTitle: { fontFamily: 'Cinzel', fontSize: 18, color: '#D4AF37', letterSpacing: 3 },
+  arsenalBackBtn: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', letterSpacing: 1 },
+  arsenalCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0D0D0D',
+    borderWidth: 1, borderColor: '#1A1A1A', borderRadius: 14, padding: 18,
+    marginTop: 12, gap: 14,
+  },
+  arsenalCardJournal: { borderColor: '#D4AF3730' },
+  arsenalCardIcon: { fontSize: 24, color: '#D4AF37', width: 32, textAlign: 'center' },
+  arsenalCardTitle: { fontFamily: 'Cinzel', fontSize: 15, color: '#E0E0E0', letterSpacing: 2 },
+  arsenalCardDesc: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', marginTop: 3, letterSpacing: 0.5 },
+  arsenalCardArrow: { fontSize: 22, color: '#333' },
+
+  // Skip Journal button
+  skipJournalBtn: {
+    borderRadius: 20, paddingVertical: 10, alignItems: 'center', marginTop: 10,
+    borderWidth: 1, borderColor: '#333',
+  },
+  skipJournalBtnText: { fontFamily: 'JetBrainsMono', fontSize: 13, color: '#6B6B6B', letterSpacing: 1 },
 });

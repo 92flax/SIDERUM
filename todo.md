@@ -483,3 +483,27 @@
 - [x] Rituals are not being fetched from Sanity CMS - only local fallback data is used
 - [x] Ensure getRituals() properly queries Sanity and returns CMS rituals
 - [x] Ensure sanctum.tsx loads rituals from CMS on mount
+
+## Arsenal & Astral Journal
+
+### Rename Forge → Arsenal
+- [x] Rename "Forge" to "Arsenal" in Sanctum hub navigation
+- [x] Arsenal contains: Forge (existing bindrune forge) + Astral Journal (new)
+
+### Astral Journal – Core Features
+- [x] Create journal store with AsyncStorage persistence (lib/journal/store.ts)
+- [x] Journal entry type: ritual name, intent (banish/invoke), dynamic selection, date/time, ruler of day, ruler of hour, active conjunctions/aspects, user notes (freetext), experience intensity rating, daily condition rating, auto-captured data
+- [x] Auto-open journal after ritual completion with pre-filled data
+- [x] User can skip journal after ritual (auto-data still saved)
+- [x] Manual journal entry creation from Arsenal menu
+
+### Astral Journal – Post-Ritual Capture UI
+- [x] Elegant post-ritual form: pre-filled ritual data (read-only), freetext notes field, intensity slider/selector, daily condition selector
+- [x] Skip button to save auto-data without user input
+- [x] Save button to save full entry with user notes
+
+### Astral Journal – Journal List & Statistics
+- [x] Journal list view: all entries sorted by date, filterable
+- [x] Statistics: ritual frequency per ritual, results by planetary day/hour
+- [x] Correlation view: planetary rulers vs user-reported intensity/results
+- [x] Elegant dark esoteric UI matching ÆONIS aesthetic
