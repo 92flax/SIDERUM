@@ -57,6 +57,7 @@ export interface SanityRitual {
   tags?: string[];
   audio_url?: string;
   supportsIntent?: boolean;
+  dynamicSelection?: 'none' | 'element' | 'planet';
   image?: {
     asset: { _ref: string; url?: string };
   };
@@ -147,6 +148,7 @@ export async function getRituals(): Promise<SanityRitual[]> {
     tags,
     audio_url,
     supportsIntent,
+    dynamicSelection,
     "image": image { asset-> { _ref, url } }
   }`;
 

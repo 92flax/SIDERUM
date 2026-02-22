@@ -15,6 +15,15 @@ import Animated, {
   withSequence,
   Easing,
 } from 'react-native-reanimated';
+import {
+  getPentagramOrder as getDynamicPentagramOrder,
+  getHexagramTrianglePaths,
+  getSelectionColor,
+  isElementName,
+  isPlanetName,
+  type ElementName,
+  type PlanetName,
+} from '@/lib/ritual/geometry';
 
 export type RitualIntent = 'BANISH' | 'INVOKE';
 
@@ -32,6 +41,11 @@ interface HoloPadProps {
   onSimulateTrace?: () => void;  // Web fallback
   intent?: RitualIntent;  // BANISH or INVOKE (affects pentagram direction)
   isLBRP?: boolean;       // Force Electric Blue for LBRP Banish
+  // Dynamic Geometry Engine props
+  dynamicSelection?: 'none' | 'element' | 'planet';
+  dynamicChoice?: string | null;  // e.g. 'Earth', 'Fire', 'Sun', 'Mars'
+  // Template parser: instruction text with {{SELECTION}} placeholder
+  instructionText?: string;
   // AR Sigil Anchor: bindrune lines/paths to render pulsing in center
   sigilLines?: SigilLine[];
   sigilPaths?: SigilPath[];
@@ -64,7 +78,7 @@ function getPentagramVertices(cx: number, cy: number, r: number): Array<{ x: num
 const BANISH_EARTH_ORDER = [3, 0, 2, 4, 1, 3];
 const INVOKE_EARTH_ORDER = [0, 3, 1, 4, 2, 0];
 
-function getPentagramOrder(intent: RitualIntent): number[] {
+function getPentagramOrderDefault(intent: RitualIntent): number[] {
   return intent === 'INVOKE' ? INVOKE_EARTH_ORDER : BANISH_EARTH_ORDER;
 }
 
@@ -89,12 +103,17 @@ function getCrossLines(cx: number, cy: number, r: number) {
 
 // Get all line segments for the shape (for ghost particle path)
 function getShapeSegments(
-  shape: string, cx: number, cy: number, r: number, intent: RitualIntent
+  shape: string, cx: number, cy: number, r: number, intent: RitualIntent,
+  dynChoice?: string | null,
 ): Array<{ x1: number; y1: number; x2: number; y2: number }> {
+  const size = (cx * 2); // Reconstruct size from cx
   switch (shape) {
     case 'Pentagram': {
       const pts = getPentagramVertices(cx, cy, r);
-      const order = getPentagramOrder(intent);
+      // Use dynamic element order if available
+      const order = (dynChoice && isElementName(dynChoice))
+        ? getDynamicPentagramOrder(intent, dynChoice as ElementName)
+        : getPentagramOrderDefault(intent);
       const segs: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
       for (let i = 0; i < order.length - 1; i++) {
         const from = pts[order[i]];
@@ -104,6 +123,20 @@ function getShapeSegments(
       return segs;
     }
     case 'Hexagram': {
+      // Use dynamic planet hexagram if available
+      if (dynChoice && isPlanetName(dynChoice)) {
+        const triPaths = getHexagramTrianglePaths(intent, dynChoice as PlanetName);
+        const segs: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+        for (const tri of triPaths) {
+          for (let i = 0; i < tri.length - 1; i++) {
+            segs.push({
+              x1: tri[i].x * size, y1: tri[i].y * size,
+              x2: tri[i + 1].x * size, y2: tri[i + 1].y * size,
+            });
+          }
+        }
+        return segs;
+      }
       const { up, down } = getHexagramTriangles(cx, cy, r);
       return [
         { x1: up[0].x, y1: up[0].y, x2: up[1].x, y2: up[1].y },
@@ -176,14 +209,25 @@ interface TrailPoint {
   id: number;
 }
 
-export function HoloPad({ shape, colorHex, isTraced, onSimulateTrace, intent = 'BANISH', isLBRP = false, sigilLines, sigilPaths, sigilWidth, sigilHeight }: HoloPadProps) {
+export function HoloPad({ shape, colorHex, isTraced, onSimulateTrace, intent = 'BANISH', isLBRP = false, dynamicSelection = 'none', dynamicChoice = null, instructionText, sigilLines, sigilPaths, sigilWidth, sigilHeight }: HoloPadProps) {
   const size = 260;
   const cx = size / 2;
   const cy = size / 2;
   const r = size * 0.38;
 
-  // Force Electric Blue for LBRP Banish
-  const activeColor = (isLBRP && intent === 'BANISH') ? '#00FFFF' : colorHex;
+  // Dynamic Geometry Engine: override color and pentagram order when active
+  const isDynamic = dynamicSelection !== 'none' && !!dynamicChoice;
+  const dynamicColor = isDynamic ? getSelectionColor(dynamicChoice!) : null;
+
+  // Force Electric Blue for LBRP Banish, then dynamic override, then default
+  const activeColor = (isLBRP && intent === 'BANISH') ? '#00FFFF' : (isDynamic ? dynamicColor! : colorHex);
+
+  // Template parser: replace {{SELECTION}} in instruction text
+  const parsedInstructionText = useMemo(() => {
+    if (!instructionText) return undefined;
+    if (!dynamicChoice) return instructionText;
+    return instructionText.replace(/\{\{SELECTION\}\}/g, dynamicChoice);
+  }, [instructionText, dynamicChoice]);
 
   // Ghost particle animation state
   const [ghostFraction, setGhostFraction] = useState(0);
@@ -202,8 +246,8 @@ export function HoloPad({ shape, colorHex, isTraced, onSimulateTrace, intent = '
   const successScale = useSharedValue(1);
   const breathOpacity = useSharedValue(0.5);
 
-  // Shape segments and total length (intent-aware)
-  const segments = useMemo(() => getShapeSegments(shape, cx, cy, r, intent), [shape, cx, cy, r, intent]);
+  // Shape segments and total length (intent-aware, dynamic-aware)
+  const segments = useMemo(() => getShapeSegments(shape, cx, cy, r, intent, isDynamic ? dynamicChoice : null), [shape, cx, cy, r, intent, isDynamic, dynamicChoice]);
   const pathTotal = useMemo(() => totalPathLength(segments), [segments]);
 
   // Ghost particle position
@@ -336,7 +380,10 @@ export function HoloPad({ shape, colorHex, isTraced, onSimulateTrace, intent = '
     switch (shape) {
       case 'Pentagram': {
         const pts = getPentagramVertices(cx, cy, r);
-        const order = getPentagramOrder(intent);
+        // Use dynamic element-specific order when active, otherwise default Earth order
+        const order = (isDynamic && isElementName(dynamicChoice!))
+          ? getDynamicPentagramOrder(intent, dynamicChoice as ElementName)
+          : getPentagramOrderDefault(intent);
         const elements: React.JSX.Element[] = [];
 
         for (let i = 0; i < order.length - 1; i++) {
@@ -415,6 +462,33 @@ export function HoloPad({ shape, colorHex, isTraced, onSimulateTrace, intent = '
       }
 
       case 'Hexagram': {
+        // Dynamic planet hexagram: use geometry engine for planet-specific triangle order
+        if (isDynamic && isPlanetName(dynamicChoice!)) {
+          const triPaths = getHexagramTrianglePaths(intent, dynamicChoice as PlanetName);
+          // triPaths has 2 arrays of normalized (0-1) points; scale to SVG coordinates
+          const svgTriPaths = triPaths.map((tri) =>
+            tri.map((pt) => ({ x: pt.x * size, y: pt.y * size }))
+          );
+          const pathStrings = svgTriPaths.map((tri) => {
+            let d = `M ${tri[0].x} ${tri[0].y}`;
+            for (let i = 1; i < tri.length; i++) {
+              d += ` L ${tri[i].x} ${tri[i].y}`;
+            }
+            d += ' Z';
+            return d;
+          });
+          return (
+            <>
+              {pathStrings.map((d, i) => (
+                <G key={`hex-tri-${i}`}>
+                  <Path d={d} stroke={strokeColor} strokeWidth={strokeWidth + 4} fill="none" opacity={0.15} strokeLinejoin="round" />
+                  <Path d={d} stroke={strokeColor} strokeWidth={strokeWidth} fill="none" opacity={isTraced ? 1 : 0.6} strokeLinejoin="round" />
+                </G>
+              ))}
+            </>
+          );
+        }
+        // Default hexagram (no dynamic selection)
         const { up, down } = getHexagramTriangles(cx, cy, r);
         const upPath = `M ${up[0].x} ${up[0].y} L ${up[1].x} ${up[1].y} L ${up[2].x} ${up[2].y} Z`;
         const downPath = `M ${down[0].x} ${down[0].y} L ${down[1].x} ${down[1].y} L ${down[2].x} ${down[2].y} Z`;
@@ -551,7 +625,9 @@ export function HoloPad({ shape, colorHex, isTraced, onSimulateTrace, intent = '
             {/* Success: golden shape overlay */}
             {isTraced && shape === 'Pentagram' && (() => {
               const pts = getPentagramVertices(cx, cy, r);
-              const order = getPentagramOrder(intent);
+              const order = (isDynamic && isElementName(dynamicChoice!))
+                ? getDynamicPentagramOrder(intent, dynamicChoice as ElementName)
+                : getPentagramOrderDefault(intent);
               let d = `M ${pts[order[0]].x} ${pts[order[0]].y}`;
               for (let i = 1; i < order.length; i++) {
                 d += ` L ${pts[order[i]].x} ${pts[order[i]].y}`;
@@ -650,7 +726,7 @@ export function HoloPad({ shape, colorHex, isTraced, onSimulateTrace, intent = '
         {/* Status label */}
         <View style={[styles.statusBadge, isTraced && { borderColor: '#D4AF3760', backgroundColor: '#D4AF3710' }]}>
           <Text style={[styles.statusText, isTraced && { color: '#D4AF37' }]}>
-            {isTraced ? '✦ Shape Sealed' : `${intent === 'INVOKE' ? '↓ Invoke' : '↑ Banish'}: ${shape}`}
+            {isTraced ? '✦ Shape Sealed' : `${intent === 'INVOKE' ? '↓ Invoke' : '↑ Banish'}: ${isDynamic && dynamicChoice ? `${dynamicChoice} ${shape}` : shape}`}
           </Text>
         </View>
       </Animated.View>

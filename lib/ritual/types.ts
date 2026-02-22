@@ -30,6 +30,7 @@ export interface Ritual {
   intention?: RitualIntention;
   traditionTag?: RitualTradition;
   supportsIntent?: boolean;
+  dynamicSelection?: 'none' | 'element' | 'planet';
   steps: RitualStep[];
 }
 

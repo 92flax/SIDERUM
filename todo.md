@@ -449,3 +449,31 @@
 - [x] Circle must NOT overlap any info or control elements
 - [x] SVG progress ring fills fluidly (not ticking) per phase duration
 - [x] Ring resets on each phase transition
+
+## Dynamic Geometry Engine
+
+### CMS Integration
+- [x] Add `dynamicSelection` field ('none' | 'element' | 'planet') to SanityRitual type
+- [x] Fetch `dynamicSelection` in getRituals() query
+
+### Geometry Dictionary (lib/ritual/geometry.ts)
+- [x] Export getRitualGeometry(shape, intent, selection) returning { paths, colorHex }
+- [x] Pentagram: Golden Dawn starting points per element (Earth, Air, Water, Fire, Spirit)
+- [x] Hexagram: 2 triangle paths (upright + downward) per planet
+- [x] Element colors: Earth=Green, Air=Yellow, Water=Blue, Fire=Red, Spirit=White
+- [x] Planet colors from PLANET_COLORS constant
+
+### Ritual Store Update
+- [x] Add dynamicSelection and selectedElement/Planet to ritual store state
+- [x] Save user's selection before launching ritual
+
+### Pre-Ritual Picker UI (sanctum.tsx)
+- [x] Check currentRitual.dynamicSelection before Start button
+- [x] Element picker: horizontal elegant picker (Fire, Water, Air, Earth, Spirit)
+- [x] Planet picker: horizontal elegant picker (Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn)
+
+### Holo-Pad Template Parser
+- [x] Replace {{SELECTION}} in instruction_text with chosen element/planet name
+- [x] Override hardcoded color/shape with getRitualGeometry() when dynamicSelection active
+- [x] Pentagram: change starting point and direction based on element
+- [x] Hexagram: implement new after Golden Dawn rules

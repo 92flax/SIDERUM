@@ -21,6 +21,7 @@ import { useRuneWalletStore } from '@/lib/store/rune-wallet';
 import { handleRitualCompletion, loadLocalAnalytics, LEVEL_TITLES } from '@/lib/ritual/completion-handler';
 import { RITUAL_INSTRUCTIONS_MD } from '@/lib/content/local-fallback';
 import { getScriptures, type SanityScripture } from '@/lib/cms/sanity';
+import { ELEMENTS, PLANETS, getSelectionColor, type ElementName, type PlanetName } from '@/lib/ritual/geometry';
 import { useRouter } from 'expo-router';
 
 const { width: SW, height: SH } = Dimensions.get('window');
@@ -88,6 +89,9 @@ export default function SanctumScreen() {
   const resetRitual = useRitualStore((s) => s.resetRitual);
   const setDirectionLocked = useRitualStore((s) => s.setDirectionLocked);
   const setTracingDetected = useRitualStore((s) => s.setTracingDetected);
+  const dynamicSelectionType = useRitualStore((s) => s.dynamicSelectionType);
+  const selectedDynamicChoice = useRitualStore((s) => s.selectedDynamicChoice);
+  const setDynamicChoice = useRitualStore((s) => s.setDynamicChoice);
   const router = useRouter();
 
   const [hubView, setHubView] = useState<HubView>('hub');
@@ -578,6 +582,75 @@ export default function SanctumScreen() {
                 </View>
               )}
 
+              {/* Dynamic Element/Planet Picker */}
+              {dynamicSelectionType === 'element' && (
+                <View style={styles.dynamicPickerSection}>
+                  <Text style={styles.dynamicPickerLabel}>SELECT ELEMENT</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dynamicPickerRow}>
+                    {ELEMENTS.map((el) => {
+                      const isSelected = selectedDynamicChoice === el;
+                      const elColor = getSelectionColor(el);
+                      return (
+                        <Pressable
+                          key={el}
+                          onPress={() => {
+                            if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setDynamicChoice(el);
+                          }}
+                          style={({ pressed }) => [
+                            styles.dynamicPill,
+                            isSelected && { borderColor: elColor, backgroundColor: elColor + '15' },
+                            pressed && { opacity: 0.7 },
+                          ]}
+                        >
+                          <View style={[styles.dynamicPillDot, { backgroundColor: elColor }]} />
+                          <Text style={[
+                            styles.dynamicPillText,
+                            isSelected && { color: elColor, fontFamily: 'Cinzel' },
+                          ]}>
+                            {el}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
+              {dynamicSelectionType === 'planet' && (
+                <View style={styles.dynamicPickerSection}>
+                  <Text style={styles.dynamicPickerLabel}>SELECT PLANET</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dynamicPickerRow}>
+                    {PLANETS.map((pl) => {
+                      const isSelected = selectedDynamicChoice === pl;
+                      const plColor = getSelectionColor(pl);
+                      return (
+                        <Pressable
+                          key={pl}
+                          onPress={() => {
+                            if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setDynamicChoice(pl);
+                          }}
+                          style={({ pressed }) => [
+                            styles.dynamicPill,
+                            isSelected && { borderColor: plColor, backgroundColor: plColor + '15' },
+                            pressed && { opacity: 0.7 },
+                          ]}
+                        >
+                          <View style={[styles.dynamicPillDot, { backgroundColor: plColor }]} />
+                          <Text style={[
+                            styles.dynamicPillText,
+                            isSelected && { color: plColor, fontFamily: 'Cinzel' },
+                          ]}>
+                            {pl}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
               <Pressable
                 onPress={() => {
                   if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -789,7 +862,11 @@ export default function SanctumScreen() {
 
               <View style={styles.instructionBox}>
                 <Text style={styles.instructionText}>
-                  {currentStep?.instruction_text}
+                  {currentStep?.instruction_text
+                    ? (selectedDynamicChoice
+                        ? currentStep.instruction_text.replace(/\{\{SELECTION\}\}/g, selectedDynamicChoice)
+                        : currentStep.instruction_text)
+                    : ''}
                 </Text>
               </View>
 
@@ -819,6 +896,9 @@ export default function SanctumScreen() {
                   onSimulateTrace={isTracingStep ? () => setTracingDetected(true) : undefined}
                   intent={intent}
                   isLBRP={isLBRP}
+                  dynamicSelection={dynamicSelectionType}
+                  dynamicChoice={selectedDynamicChoice}
+                  instructionText={currentStep?.instruction_text}
                   sigilLines={sigilData?.lines}
                   sigilPaths={sigilData?.paths}
                   sigilWidth={sigilData?.width}
@@ -1239,4 +1319,24 @@ const styles = StyleSheet.create({
   xpReward: { marginTop: 16, alignItems: 'center' },
   xpRewardText: { fontFamily: 'JetBrainsMono', fontSize: 20, color: '#22C55E', fontWeight: '700' },
   levelUpText: { fontFamily: 'Cinzel', fontSize: 16, color: '#FFD700', marginTop: 4, letterSpacing: 3 },
+
+  // Dynamic Element/Planet Picker
+  dynamicPickerSection: { marginTop: 16 },
+  dynamicPickerLabel: {
+    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B',
+    letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8,
+  },
+  dynamicPickerRow: { marginBottom: 4 },
+  dynamicPill: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: '#333333',
+    borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8,
+    marginRight: 8,
+  },
+  dynamicPillDot: {
+    width: 8, height: 8, borderRadius: 4, marginRight: 8,
+  },
+  dynamicPillText: {
+    fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B',
+  },
 });

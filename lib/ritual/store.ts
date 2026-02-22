@@ -7,6 +7,7 @@ import { Ritual, RitualStep, RitualPlayerState } from './types';
 import ritualsData from './rituals_db.json';
 
 type RitualIntent = 'BANISH' | 'INVOKE';
+type DynamicSelectionType = 'none' | 'element' | 'planet';
 
 interface RitualState {
   rituals: Ritual[];
@@ -16,11 +17,14 @@ interface RitualState {
   isDirectionLocked: boolean;
   isTracingDetected: boolean;
   intent: RitualIntent;
+  dynamicSelectionType: DynamicSelectionType;
+  selectedDynamicChoice: string | null;
 
   // Actions
   loadRituals: () => void;
   selectRitual: (id: string) => void;
   setIntent: (intent: RitualIntent) => void;
+  setDynamicChoice: (choice: string | null) => void;
   startRitual: () => void;
   nextStep: () => void;
   prevStep: () => void;
@@ -40,6 +44,8 @@ export const useRitualStore = create<RitualState>((set, get) => ({
   isDirectionLocked: false,
   isTracingDetected: false,
   intent: 'BANISH' as RitualIntent,
+  dynamicSelectionType: 'none' as DynamicSelectionType,
+  selectedDynamicChoice: null as string | null,
 
   loadRituals: () => {
     set({ rituals: ritualsData as Ritual[] });
@@ -47,11 +53,22 @@ export const useRitualStore = create<RitualState>((set, get) => ({
 
   selectRitual: (id: string) => {
     const ritual = get().rituals.find(r => r.id === id) || null;
-    set({ currentRitual: ritual, currentStepIndex: 0, playerState: 'idle' });
+    const dynSel = (ritual?.dynamicSelection ?? 'none') as DynamicSelectionType;
+    set({
+      currentRitual: ritual,
+      currentStepIndex: 0,
+      playerState: 'idle',
+      dynamicSelectionType: dynSel,
+      selectedDynamicChoice: null,
+    });
   },
 
   setIntent: (intent: RitualIntent) => {
     set({ intent });
+  },
+
+  setDynamicChoice: (choice: string | null) => {
+    set({ selectedDynamicChoice: choice });
   },
 
   startRitual: () => {
@@ -131,6 +148,8 @@ export const useRitualStore = create<RitualState>((set, get) => ({
       playerState: 'idle',
       isDirectionLocked: false,
       isTracingDetected: false,
+      dynamicSelectionType: 'none',
+      selectedDynamicChoice: null,
     });
   },
 
