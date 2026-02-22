@@ -92,6 +92,8 @@ export default function SanctumScreen() {
   const dynamicSelectionType = useRitualStore((s) => s.dynamicSelectionType);
   const selectedDynamicChoice = useRitualStore((s) => s.selectedDynamicChoice);
   const setDynamicChoice = useRitualStore((s) => s.setDynamicChoice);
+  const isLoadingRituals = useRitualStore((s) => s.isLoadingRituals);
+  const ritualsSource = useRitualStore((s) => s.ritualsSource);
   const router = useRouter();
 
   const [hubView, setHubView] = useState<HubView>('hub');
@@ -706,7 +708,20 @@ export default function SanctumScreen() {
             ))}
           </ScrollView>
 
-          <Text style={styles.sectionTitle}>Available ({filteredRituals.length})</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={styles.sectionTitle}>Available ({filteredRituals.length})</Text>
+            {ritualsSource !== 'none' && (
+              <Text style={{ fontFamily: 'JetBrainsMono', fontSize: 9, color: ritualsSource === 'cms' ? '#D4AF37' : '#6B6B6B', letterSpacing: 1 }}>
+                {ritualsSource === 'cms' ? '✦ CMS' : '◇ LOCAL'}
+              </Text>
+            )}
+          </View>
+          {isLoadingRituals ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }}>
+              <Text style={{ fontFamily: 'Cinzel', fontSize: 14, color: '#D4AF37', marginBottom: 8 }}>Loading Rituals...</Text>
+              <Text style={{ fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B' }}>Connecting to CMS</Text>
+            </View>
+          ) : (
           <FlatList
             data={filteredRituals}
             keyExtractor={(item) => item.id}
@@ -737,6 +752,7 @@ export default function SanctumScreen() {
             }}
             contentContainerStyle={styles.listContent}
           />
+          )}
         </View>
       </ScreenContainer>
     );

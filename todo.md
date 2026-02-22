@@ -477,3 +477,9 @@
 - [x] Override hardcoded color/shape with getRitualGeometry() when dynamicSelection active
 - [x] Pentagram: change starting point and direction based on element
 - [x] Hexagram: implement new after Golden Dawn rules
+
+## CMS Ritual Loading Fix
+
+- [x] Rituals are not being fetched from Sanity CMS - only local fallback data is used
+- [x] Ensure getRituals() properly queries Sanity and returns CMS rituals
+- [x] Ensure sanctum.tsx loads rituals from CMS on mount
