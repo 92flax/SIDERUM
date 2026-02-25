@@ -31,6 +31,8 @@ export interface Ritual {
   traditionTag?: RitualTradition;
   supportsIntent?: boolean;
   dynamicSelection?: 'none' | 'element' | 'planet';
+  isRepeatable?: boolean;
+  repeatFromStep?: number;
   steps: RitualStep[];
 }
 

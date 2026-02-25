@@ -723,3 +723,36 @@
 ### Aesthetics
 - [x] Vantablack (#050505) backgrounds throughout
 - [x] Cyber-Occult aesthetic strict adherence
+
+## Session 20 – Cyclic Ritual Loop Feature
+
+### GROQ Query Update
+- [x] Fetch `isRepeatable` and `repeatFromStep` in ritual GROQ query
+- [x] Add `isRepeatable` and `repeatFromStep` to Ritual type
+
+### Ritual Store: Loop Action
+- [x] Add `jumpToStep(stepOrder: number)` action to ritual store
+- [x] jumpToStep finds the step index where step.order === stepOrder
+- [x] jumpToStep resets direction/tracing state for the target step
+- [x] Add `cycleCount` state to track how many loops the user has done
+
+### Completed Screen UI
+- [x] Check if ritual.isRepeatable === true on completed screen
+- [x] If repeatable: show dual buttons [DESCEND DEEPER] + [SEAL & CONCLUDE]
+- [x] [DESCEND DEEPER]: ghost/outline button, Cinzel, SIDERUM Gold glow border
+- [x] [SEAL & CONCLUDE]: solid dark button, standard end/complete
+- [x] If not repeatable: show existing single completion flow
+- [x] Display cycle count if > 0 ("Cycle X completed")
+
+### Loop Logic
+- [x] DESCEND DEEPER: do NOT trigger addXp or completion
+- [x] DESCEND DEEPER: jump to step where step.order === repeatFromStep
+- [x] DESCEND DEEPER: haptic feedback (Medium)
+- [x] DESCEND DEEPER: increment cycle count
+- [x] SEAL & CONCLUDE: trigger normal completion (XP, journal, etc.)
+- [x] User can loop infinitely
+
+### Aesthetics
+- [x] Loop button: glowing gold border (#D4AF37), vantablack background
+- [x] Cycle counter in JetBrainsMono
+- [x] ÆONIS aesthetic throughout

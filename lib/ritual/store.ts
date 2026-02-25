@@ -23,6 +23,7 @@ interface RitualState {
   selectedDynamicChoice: string | null;
   isLoadingRituals: boolean;
   ritualsSource: 'cms' | 'local' | 'none';
+  cycleCount: number;
 
   // Actions
   loadRituals: () => Promise<void>;
@@ -35,6 +36,7 @@ interface RitualState {
   pauseRitual: () => void;
   resumeRitual: () => void;
   resetRitual: () => void;
+  jumpToStep: (stepOrder: number) => void;
   setDirectionLocked: (locked: boolean) => void;
   setTracingDetected: (detected: boolean) => void;
   getCurrentStep: () => RitualStep | null;
@@ -71,6 +73,8 @@ function mapCmsRitualToLocal(cms: any): Ritual | null {
     traditionTag: cms.traditionTag ?? undefined,
     supportsIntent: cms.supportsIntent ?? false,
     dynamicSelection: cms.dynamicSelection ?? 'none',
+    isRepeatable: cms.isRepeatable ?? false,
+    repeatFromStep: cms.repeatFromStep ?? undefined,
     steps,
   };
 }
@@ -87,6 +91,7 @@ export const useRitualStore = create<RitualState>((set, get) => ({
   selectedDynamicChoice: null as string | null,
   isLoadingRituals: false,
   ritualsSource: 'none' as 'cms' | 'local' | 'none',
+  cycleCount: 0,
 
   loadRituals: async () => {
     // Don't reload if already loaded
@@ -238,6 +243,43 @@ export const useRitualStore = create<RitualState>((set, get) => ({
       isTracingDetected: false,
       dynamicSelectionType: 'none',
       selectedDynamicChoice: null,
+      cycleCount: 0,
+    });
+  },
+
+  jumpToStep: (stepOrder: number) => {
+    const { currentRitual } = get();
+    if (!currentRitual) return;
+
+    // Find the step index where step.order === stepOrder
+    const targetIndex = currentRitual.steps.findIndex(s => s.order === stepOrder);
+    if (targetIndex === -1) {
+      // Fallback: jump to first step if repeatFromStep not found
+      const fallbackStep = currentRitual.steps[0];
+      let state: RitualPlayerState = 'running';
+      if (fallbackStep?.compass_direction) state = 'compass_lock';
+      if (fallbackStep?.action_type === 'TRACE') state = 'tracing';
+      set({
+        currentStepIndex: 0,
+        playerState: state,
+        isDirectionLocked: false,
+        isTracingDetected: false,
+        cycleCount: get().cycleCount + 1,
+      });
+      return;
+    }
+
+    const targetStep = currentRitual.steps[targetIndex];
+    let nextState: RitualPlayerState = 'running';
+    if (targetStep.compass_direction) nextState = 'compass_lock';
+    if (targetStep.action_type === 'TRACE') nextState = 'tracing';
+
+    set({
+      currentStepIndex: targetIndex,
+      playerState: nextState,
+      isDirectionLocked: false,
+      isTracingDetected: false,
+      cycleCount: get().cycleCount + 1,
     });
   },
 
@@ -291,6 +333,8 @@ async function fetchFullCmsRituals(): Promise<any[]> {
     tradition,
     intention,
     traditionTag,
+    isRepeatable,
+    repeatFromStep,
     steps,
     "image": image { asset-> { _ref, url } }
   }`;

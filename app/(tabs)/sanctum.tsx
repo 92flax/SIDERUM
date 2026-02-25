@@ -101,6 +101,8 @@ export default function SanctumScreen() {
   const setDynamicChoice = useRitualStore((s) => s.setDynamicChoice);
   const isLoadingRituals = useRitualStore((s) => s.isLoadingRituals);
   const ritualsSource = useRitualStore((s) => s.ritualsSource);
+  const jumpToStep = useRitualStore((s) => s.jumpToStep);
+  const cycleCount = useRitualStore((s) => s.cycleCount);
   const router = useRouter();
 
   // Journal store
@@ -819,15 +821,25 @@ export default function SanctumScreen() {
   // RITUAL COMPLETED
   // ==========================================
   if (hubView === 'player' && playerState === 'completed') {
+    const isRepeatable = currentRitual?.isRepeatable === true;
+    const repeatTarget = currentRitual?.repeatFromStep ?? 1;
+
     return (
       <ScreenContainer>
         <View style={styles.completedContainer}>
           <Text style={styles.completedSymbol}>✦</Text>
-          <Text style={styles.completedTitle}>Ritual Complete</Text>
+          <Text style={styles.completedTitle}>
+            {isRepeatable && cycleCount > 0 ? 'Cycle Complete' : 'Ritual Complete'}
+          </Text>
           <Text style={styles.completedName}>{currentRitual?.name}</Text>
           <Text style={styles.completedIntent}>
             Intent: {intent === 'BANISH' ? '↑ Banishing' : '↓ Invoking'}
           </Text>
+          {cycleCount > 0 && (
+            <Text style={styles.cycleCounter}>
+              CYCLE {cycleCount} COMPLETED
+            </Text>
+          )}
           <Text style={styles.completedText}>
             All {currentRitual?.steps.length} steps have been performed.
           </Text>
@@ -839,6 +851,27 @@ export default function SanctumScreen() {
               )}
             </View>
           )}
+
+          {/* Cyclic Ritual: DESCEND DEEPER button */}
+          {isRepeatable && (
+            <Pressable
+              onPress={() => {
+                if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                // Do NOT trigger completion/XP – just loop back
+                setCompletionResult(null);
+                jumpToStep(repeatTarget);
+              }}
+              style={({ pressed }) => [
+                styles.cycleBtn,
+                pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
+              ]}
+            >
+              <Text style={styles.cycleBtnText}>⟳ DESCEND DEEPER</Text>
+              <Text style={styles.cycleBtnSub}>Initiate next cycle from step {repeatTarget}</Text>
+            </Pressable>
+          )}
+
+          {/* SEAL & CONCLUDE button (standard completion) */}
           <Pressable
             onPress={() => {
               if (Platform.OS !== ('web' as string)) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -847,10 +880,16 @@ export default function SanctumScreen() {
               setCompletionResult(null);
               setHubView('hub');
             }}
-            style={({ pressed }) => [styles.startBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+            style={({ pressed }) => [
+              isRepeatable ? styles.sealBtn : styles.startBtn,
+              pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
+            ]}
           >
-            <Text style={styles.startBtnText}>Open Astral Journal</Text>
+            <Text style={isRepeatable ? styles.sealBtnText : styles.startBtnText}>
+              {isRepeatable ? '✦ SEAL & CONCLUDE' : 'Open Astral Journal'}
+            </Text>
           </Pressable>
+
           <Pressable
             onPress={() => {
               if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -861,7 +900,9 @@ export default function SanctumScreen() {
             }}
             style={({ pressed }) => [styles.skipJournalBtn, pressed && { opacity: 0.7 }]}
           >
-            <Text style={styles.skipJournalBtnText}>Skip Journal</Text>
+            <Text style={styles.skipJournalBtnText}>
+              {isRepeatable ? 'Skip & Exit' : 'Skip Journal'}
+            </Text>
           </Pressable>
         </View>
       </ScreenContainer>
@@ -1517,6 +1558,63 @@ const styles = StyleSheet.create({
   arsenalCardTitle: { fontFamily: 'Cinzel', fontSize: 15, color: '#E0E0E0', letterSpacing: 2 },
   arsenalCardDesc: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', marginTop: 3, letterSpacing: 0.5 },
   arsenalCardArrow: { fontSize: 22, color: '#333' },
+
+  // Cyclic Ritual
+  cycleCounter: {
+    fontFamily: 'JetBrainsMono',
+    fontSize: 11,
+    color: '#D4AF37',
+    letterSpacing: 3,
+    marginTop: 8,
+    textTransform: 'uppercase' as const,
+  },
+  cycleBtn: {
+    backgroundColor: '#050505',
+    borderWidth: 1.5,
+    borderColor: '#D4AF37',
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: 'center' as const,
+    marginTop: 20,
+    width: '100%' as const,
+    shadowColor: '#D4AF37',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  cycleBtnText: {
+    fontFamily: 'Cinzel',
+    fontSize: 16,
+    color: '#D4AF37',
+    letterSpacing: 3,
+    fontWeight: '700' as const,
+  },
+  cycleBtnSub: {
+    fontFamily: 'JetBrainsMono',
+    fontSize: 10,
+    color: '#6B6B6B',
+    letterSpacing: 1,
+    marginTop: 4,
+  },
+  sealBtn: {
+    backgroundColor: '#0D0D0D',
+    borderWidth: 1,
+    borderColor: '#333',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    alignItems: 'center' as const,
+    marginTop: 12,
+    width: '100%' as const,
+  },
+  sealBtnText: {
+    fontFamily: 'Cinzel',
+    fontSize: 14,
+    color: '#E0E0E0',
+    letterSpacing: 2,
+  },
 
   // Skip Journal button
   skipJournalBtn: {
