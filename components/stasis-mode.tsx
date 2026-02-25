@@ -26,11 +26,15 @@ import { useRitualStore } from '@/lib/ritual/store';
 const { width: SW } = Dimensions.get('window');
 
 // ─── SVG Ring Dimensions ────────────────────────────────────
-const RING_SIZE = Math.min(SW * 0.7, 280);
+const RING_SIZE = Math.min(SW * 0.75, 300);
 const RING_CENTER = RING_SIZE / 2;
-const RING_STROKE = 3;
+const RING_STROKE = 4;
 const RING_RADIUS = RING_SIZE / 2 - RING_STROKE * 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+// Inner breathing circle (visible ring inside the progress ring)
+const INNER_CIRCLE_SIZE = RING_SIZE - 36;
+const INNER_BORDER = 2;
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -563,8 +567,9 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
         {/* Nebula glow (does not scale) */}
         <Animated.View style={[s.nebulaGlow, { backgroundColor: glowColor }, nebulaGlowStyle]} />
 
-        {/* Scaled container: SVG ring + phase text */}
+        {/* Scaled container: SVG ring + inner circle + phase text */}
         <Animated.View style={breathCircleStyle}>
+          {/* SVG Progress Ring (outer) */}
           <Svg width={RING_SIZE} height={RING_SIZE}>
             <Defs>
               <LinearGradient id="phaseGrad" x1="0" y1="0" x2="1" y2="1">
@@ -573,7 +578,7 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
               </LinearGradient>
             </Defs>
 
-            {/* Track ring */}
+            {/* Track ring (background) */}
             <Circle
               cx={RING_CENTER}
               cy={RING_CENTER}
@@ -583,7 +588,7 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
               fill="none"
             />
 
-            {/* Progress ring (fluid fill per phase) */}
+            {/* Animated progress ring (fills per phase) */}
             <AnimatedCircle
               cx={RING_CENTER}
               cy={RING_CENTER}
@@ -597,6 +602,9 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
               transform={`rotate(-90 ${RING_CENTER} ${RING_CENTER})`}
             />
           </Svg>
+
+          {/* Inner breathing circle (crisp ring inside the progress ring) */}
+          <View style={[s.innerCircle, { borderColor: glowColor + '40' }]} />
 
           {/* Phase text centered */}
           <View style={s.centerText}>
@@ -889,14 +897,21 @@ const s = StyleSheet.create({
     height: RING_SIZE + 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
-    marginBottom: 6,
+    marginTop: 16,
+    marginBottom: 4,
   },
   nebulaGlow: {
     position: 'absolute',
     width: RING_SIZE + 20,
     height: RING_SIZE + 20,
     borderRadius: (RING_SIZE + 20) / 2,
+  },
+  innerCircle: {
+    position: 'absolute',
+    width: INNER_CIRCLE_SIZE,
+    height: INNER_CIRCLE_SIZE,
+    borderRadius: INNER_CIRCLE_SIZE / 2,
+    borderWidth: INNER_BORDER,
   },
   centerText: {
     position: 'absolute',
@@ -909,8 +924,8 @@ const s = StyleSheet.create({
   },
   phaseText: {
     fontFamily: 'Cinzel',
-    fontSize: 22,
-    letterSpacing: 5,
+    fontSize: 24,
+    letterSpacing: 6,
   },
 
   // ── Phase Pills ───────────────────────────────────────────

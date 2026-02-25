@@ -548,3 +548,9 @@
 - [x] Circle is way too small – restore proper size (280px area)
 - [x] SVG phase progress ring is present and fills during each breath phase
 - [x] Ring resets on each phase transition and fills fluidly over the phase duration
+
+## Session 10 – Stasis Circle Full Restore
+
+- [x] Circle enlarged to 300px with 4px stroke, inner breathing ring (264px) added
+- [x] SVG progress ring (4px stroke, gradient fill per phase) fully functional with strokeDashoffset animation
+- [x] Restored from a8c8c2c3 reference, enhanced with larger dimensions and inner circle
