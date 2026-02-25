@@ -19,7 +19,9 @@ import { getExactAspects } from '@/lib/astro/aspects';
 import { PLANET_SYMBOLS, PLANET_COLORS, ZODIAC_SYMBOLS, Planet } from '@/lib/astro/types';
 import { calculatePowerRating, getPowerLabel } from '@/lib/astro/power-rating';
 import { calculateAstralPotency, AstralPotencyReport } from '@/lib/astro/potency-engine';
-import { getActiveEvents, SanityEvent } from '@/lib/cms/sanity';
+import { getActiveEvents, SanityEvent, getCosmicEvents, SanityCosmicEvent } from '@/lib/cms/sanity';
+import { BuffHud } from '@/components/buff-hud';
+import { MoonIntelModal, MoonIntelData } from '@/components/moon-intel-modal';
 import { useRouter } from 'expo-router';
 import { useNatalStore } from '@/lib/store/natal-store';
 import { useRuneWalletStore } from '@/lib/store/rune-wallet';
@@ -76,6 +78,8 @@ export default function HomeScreen() {
   const [cmsLevelTitles, setCmsLevelTitles] = useState<Record<number, string>>({});
   const [stasisBuffActive, setStasisBuffActive] = useState(false);
   const [activeEvents, setActiveEvents] = useState<SanityEvent[]>([]);
+  const [cosmicEvents, setCosmicEvents] = useState<SanityCosmicEvent[]>([]);
+  const [showMoonModal, setShowMoonModal] = useState(false);
   const router = useRouter();
 
   // Load analytics, magic name, CMS levels, and active events
@@ -85,6 +89,7 @@ export default function HomeScreen() {
       if (name) setMagicName(name);
     });
     getActiveEvents().then(setActiveEvents).catch(() => {});
+    getCosmicEvents().then(setCosmicEvents).catch(() => {});
     // Load CMS level titles (fall back to local)
     getLevels().then((levels) => {
       if (levels.length > 0) {
@@ -213,15 +218,36 @@ export default function HomeScreen() {
     return getPowerLabel(powerRating.totalScore);
   }, [powerRating]);
 
-  // Astral Potency Engine
+  // Astral Potency Engine v2
   const potencyReport = useMemo<AstralPotencyReport | null>(() => {
     if (!chartData) return null;
-    const activeRune = getActiveRune();
-    const currentLevel = analytics?.levelRank ?? 0;
+    // Determine user intent from the current planetary hour
+    const hourPlanetLocal = planetaryHour.currentHour.planet;
+    const intentMap: Record<string, string> = {
+      Mars: 'BANISH', Saturn: 'BANISH',
+      Sun: 'INVOKE', Moon: 'INVOKE', Mercury: 'INVOKE', Jupiter: 'INVOKE', Venus: 'INVOKE',
+    };
+    const userIntent = intentMap[hourPlanetLocal] ?? null;
+    // Last session timestamp (Gnosis or Stasis)
+    const lastSession = analytics?.lastStasisTimestamp ?? null;
     return calculateAstralPotency(
-      planetaryHour, currentLevel, stasisBuffActive, activeRune, activeEvents,
+      planetaryHour, userIntent, lastSession, cosmicEvents,
     );
-  }, [chartData, planetaryHour, analytics, stasisBuffActive, activeRuneId, activeEvents]);
+  }, [chartData, planetaryHour, analytics, stasisBuffActive, cosmicEvents]);
+
+  // Moon intel data for modal
+  const moonIntelData = useMemo<MoonIntelData | null>(() => {
+    if (!chartData) return null;
+    const moonPos = chartData.planets.find(p => p.planet === 'Moon');
+    return {
+      phaseName: moonPhase.phaseName,
+      illumination: moonPhase.illumination,
+      emoji: moonPhase.emoji,
+      zodiacSign: moonPos?.sign,
+      zodiacSymbol: moonPos ? ZODIAC_SYMBOLS[moonPos.sign] : undefined,
+      zodiacDegree: moonPos ? `${moonPos.signDegree}°${moonPos.signMinute.toString().padStart(2, '0')}'` : undefined,
+    };
+  }, [chartData, moonPhase]);
 
   const handleProFeature = (featureId: string) => {
     if (!isFeatureUnlocked(featureId)) {
@@ -337,113 +363,8 @@ export default function HomeScreen() {
           <Text style={styles.liveText}>LIVE · Auto-refresh 30s</Text>
         </View>
 
-        {/* ===== Astral Potency Card (Engine-driven) ===== */}
-        {potencyReport && (
-          <View style={[
-            styles.potencyCard,
-            { borderColor: potencyReport.planetColor + '50' },
-          ]}>
-            {/* Animated glow background */}
-            <View style={[
-              styles.potencyGlow,
-              { backgroundColor: potencyReport.planetColor + '08' },
-            ]} />
-
-            {/* Priority badge */}
-            <View style={[
-              styles.potencyBadge,
-              potencyReport.priority === 1 && { backgroundColor: '#EF444420', borderColor: '#EF444460' },
-              potencyReport.priority === 2 && { backgroundColor: '#D4AF3720', borderColor: '#D4AF3760' },
-              potencyReport.priority === 3 && { backgroundColor: potencyReport.planetColor + '15', borderColor: potencyReport.planetColor + '40' },
-            ]}>
-              <Text style={[
-                styles.potencyBadgeText,
-                potencyReport.priority === 1 && { color: '#EF4444' },
-                potencyReport.priority === 2 && { color: '#D4AF37' },
-                potencyReport.priority === 3 && { color: potencyReport.planetColor },
-              ]}>
-                {potencyReport.priority === 1 ? '⚡ COSMIC EVENT' : potencyReport.priority === 2 ? '✦ PERFECT ALIGNMENT' : `☉ HOUR OF ${potencyReport.hourPlanet.toUpperCase()}`}
-              </Text>
-            </View>
-
-            {/* Headline */}
-            <Text style={[styles.potencyHeadline, { color: potencyReport.planetColor }]}>
-              {potencyReport.headline}
-            </Text>
-
-            {/* Message */}
-            <Text style={styles.potencyMessage}>
-              {potencyReport.message}
-            </Text>
-
-            {/* Potency gauge */}
-            <View style={styles.potencyGaugeRow}>
-              <View style={styles.potencyGaugeTrack}>
-                <View style={[
-                  styles.potencyGaugeFill,
-                  { width: `${potencyReport.potencyScore}%`, backgroundColor: potencyReport.planetColor },
-                ]} />
-              </View>
-              <Text style={[styles.potencyPercent, { color: potencyReport.planetColor }]}>
-                {potencyReport.potencyScore}%
-              </Text>
-            </View>
-
-            {/* Breakdown pills */}
-            <View style={styles.potencyPills}>
-              <View style={styles.potencyPill}>
-                <Text style={styles.potencyPillLabel}>Adept</Text>
-                <Text style={[styles.potencyPillValue, { color: '#D4AF37' }]}>
-                  ×{potencyReport.breakdown.adeptPotency.toFixed(1)}
-                </Text>
-              </View>
-              <View style={styles.potencyPill}>
-                <Text style={styles.potencyPillLabel}>Rune</Text>
-                <Text style={[
-                  styles.potencyPillValue,
-                  potencyReport.breakdown.runeSynergy === 'HIGH' && { color: '#22C55E' },
-                  potencyReport.breakdown.runeSynergy === 'MED' && { color: '#3B82F6' },
-                  potencyReport.breakdown.runeSynergy === 'LOW' && { color: '#6B6B6B' },
-                ]}>
-                  {potencyReport.breakdown.runeSynergy}
-                </Text>
-              </View>
-              {potencyReport.breakdown.collectiveBoost > 1 && (
-                <View style={styles.potencyPill}>
-                  <Text style={styles.potencyPillLabel}>Event</Text>
-                  <Text style={[styles.potencyPillValue, { color: '#EF4444' }]}>
-                    ×{potencyReport.breakdown.collectiveBoost}
-                  </Text>
-                </View>
-              )}
-              {potencyReport.breakdown.stasisActive && (
-                <View style={styles.potencyPill}>
-                  <Text style={styles.potencyPillLabel}>Stasis</Text>
-                  <Text style={[styles.potencyPillValue, { color: '#22C55E' }]}>ON</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Quick Action button */}
-            {potencyReport.suggestedRitualId && (
-              <Pressable
-                onPress={() => {
-                  if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  router.push('/(tabs)/sanctum');
-                }}
-                style={({ pressed }) => [
-                  styles.potencyAction,
-                  { borderColor: potencyReport.planetColor + '60' },
-                  pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
-                ]}
-              >
-                <Text style={[styles.potencyActionText, { color: potencyReport.planetColor }]}>
-                  Begin Ritual →
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        )}
+        {/* ===== RPG Buff HUD (Potency Engine v2) ===== */}
+        {potencyReport && <BuffHud report={potencyReport} />}
 
         {/* ===== Event Horizon Warning ===== */}
         {eventHorizon.nextEvent && daysUntilEvent !== null && daysUntilEvent <= 30 && (
@@ -493,7 +414,17 @@ export default function HomeScreen() {
             </View>
           </Pressable>
 
-          <View style={[styles.heroCard, { borderColor: '#C0C0C040' }]}>
+          <Pressable
+            onPress={() => {
+              if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowMoonModal(true);
+            }}
+            style={({ pressed }) => [
+              styles.heroCard,
+              { borderColor: '#C0C0C040' },
+              pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
+            ]}
+          >
             <Text style={styles.heroLabel}>Moon Phase</Text>
             <Text style={styles.moonEmoji}>{moonPhase.emoji}</Text>
             <Text style={[styles.heroTitle, { color: '#C0C0C0' }]}>{moonPhase.phaseName}</Text>
@@ -510,7 +441,7 @@ export default function HomeScreen() {
                 </Text>
               </>
             )}
-          </View>
+          </Pressable>
         </View>
 
         {/* Current Influence Card */}
@@ -780,6 +711,29 @@ export default function HomeScreen() {
                     </View>
                   )}
                 </View>
+                {/* Magickal Directive from CMS (if a cosmic event matches) */}
+                {(() => {
+                  const matchedCosmic = cosmicEvents.find(ce =>
+                    ce.aspectKey && selectedEvent.title.toLowerCase().includes(ce.aspectKey.toLowerCase())
+                  );
+                  if (!matchedCosmic) return null;
+                  return (
+                    <View style={styles.directiveSection}>
+                      {matchedCosmic.magickalDirective && (
+                        <>
+                          <Text style={styles.directiveHeader}>[ MAGICKAL DIRECTIVE ]</Text>
+                          <Text style={styles.directiveText}>{matchedCosmic.magickalDirective}</Text>
+                        </>
+                      )}
+                      {matchedCosmic.warning && (
+                        <>
+                          <Text style={styles.directiveWarningHeader}>[ WARNING ]</Text>
+                          <Text style={styles.directiveWarning}>{matchedCosmic.warning}</Text>
+                        </>
+                      )}
+                    </View>
+                  );
+                })()}
                 <Pressable
                   onPress={() => setSelectedEvent(null)}
                   style={({ pressed }) => [styles.modalCloseBtn, pressed && { opacity: 0.8 }]}
@@ -823,6 +777,13 @@ export default function HomeScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Moon Intel Modal */}
+      <MoonIntelModal
+        visible={showMoonModal}
+        onClose={() => setShowMoonModal(false)}
+        data={moonIntelData}
+      />
 
       <PaywallModal visible={showPaywall} onClose={() => setShowPaywall(false)} featureId={paywallFeature} />
     </ScreenContainer>
@@ -1084,4 +1045,40 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { fontSize: 16, color: '#E0E0E0' },
   loadingSubtext: { fontSize: 24, color: '#D4AF37', marginTop: 12, letterSpacing: 8 },
+
+  // Magickal Directive (Event Modal)
+  directiveSection: {
+    backgroundColor: '#111',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#D4AF3730',
+  },
+  directiveHeader: {
+    fontFamily: 'JetBrainsMono',
+    fontSize: 11,
+    color: '#D4AF37',
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  directiveText: {
+    fontSize: 13,
+    color: '#E0E0E0',
+    lineHeight: 20,
+    fontStyle: 'italic',
+  },
+  directiveWarningHeader: {
+    fontFamily: 'JetBrainsMono',
+    fontSize: 11,
+    color: '#EF4444',
+    letterSpacing: 2,
+    marginTop: 14,
+    marginBottom: 8,
+  },
+  directiveWarning: {
+    fontSize: 13,
+    color: '#F87171',
+    lineHeight: 20,
+  },
 });

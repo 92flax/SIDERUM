@@ -1,52 +1,61 @@
 // ============================================================
-// ÆONIS – Astral Potency Engine
-// Synthesizes astrological data, user progress, and CMS events
-// into a single actionable "Weather Report".
+// ÆONIS – Astral Potency Engine v2
+// Base 60% Unyielding Will + Additive Buffs (max 100%)
 //
-// 4 Pillars:
-//   1. Adept Potency Score
-//   2. Rune Synergy
-//   3. Collective Boost (Global Events)
-//   4. Actionable Recommendations
+// Buffs:
+//   +15  Planetary Hour matches user intent
+//   +5   Day Ruler matches user intent
+//   +10  Active Cosmic Event supports user intent
+//   +10  Recent Gnosis/Stasis session (last 6h)
 // ============================================================
 
 import { Planet, PLANET_COLORS } from './types';
 import { PlanetaryHourInfo } from './planetary-hours';
-import { ELDER_FUTHARK, Rune } from '@/lib/runes/futhark';
 import { DAY_RULERS } from './ruler-of-day';
-import { SanityEvent } from '@/lib/cms/sanity';
-import { SavedRune } from '@/lib/store/rune-wallet';
+import { SanityCosmicEvent } from '@/lib/cms/sanity';
 
 // ─── Types ──────────────────────────────────────────────────
 
-export type SynergyLevel = 'HIGH' | 'MED' | 'LOW';
+export interface PotencyBuff {
+  id: string;
+  label: string;
+  value: number;       // e.g. 60, 15, 5, 10
+  isBase: boolean;     // true only for the base 60%
+  active: boolean;     // whether this buff is currently active
+  color: string;       // UI color for the buff tag
+}
 
 export interface AstralPotencyReport {
-  /** Priority level: 1 = Global Event, 2 = High Synergy, 3 = Standard */
-  priority: 1 | 2 | 3;
-  /** Short headline for the card */
-  headline: string;
-  /** Full message body */
-  message: string;
-  /** Recommended action text */
-  recommendation: string;
-  /** Suggested ritual ID to link to (if applicable) */
-  suggestedRitualId: string | null;
+  /** Total potency score (60-100) */
+  potencyScore: number;
+  /** All buffs (active and inactive base always shown) */
+  buffs: PotencyBuff[];
   /** Current hour planet */
   hourPlanet: Planet;
   /** Planet color for UI theming */
   planetColor: string;
-  /** Composite potency score (0-100) */
-  potencyScore: number;
-  /** Breakdown details */
-  breakdown: {
-    adeptPotency: number;
-    runeSynergy: SynergyLevel;
-    runeSynergyMultiplier: number;
-    collectiveBoost: number;
-    stasisActive: boolean;
-  };
+  /** Short headline */
+  headline: string;
+  /** Recommendation text */
+  recommendation: string;
+  /** Suggested ritual ID */
+  suggestedRitualId: string | null;
+  /** Active cosmic event (if any) */
+  activeCosmicEvent: SanityCosmicEvent | null;
 }
+
+// ─── Intent Mapping ─────────────────────────────────────────
+// Maps planets to the intents they empower
+
+const PLANET_INTENTS: Record<string, string[]> = {
+  Sun:     ['INVOKE', 'SOLAR', 'EMPOWERMENT', 'SELF'],
+  Moon:    ['INVOKE', 'LUNAR', 'DIVINATION', 'DREAMS'],
+  Mars:    ['BANISH', 'PROTECTION', 'FIRE', 'MARTIAL'],
+  Mercury: ['INVOKE', 'COMMUNICATION', 'AIR', 'STUDY'],
+  Jupiter: ['INVOKE', 'PROSPERITY', 'EXPANSION', 'WISDOM'],
+  Venus:   ['INVOKE', 'LOVE', 'BEAUTY', 'EARTH'],
+  Saturn:  ['BANISH', 'DISCIPLINE', 'RESTRICTION', 'ENDINGS'],
+};
 
 // ─── Planetary Hour → Recommendation Mapping ────────────────
 
@@ -60,141 +69,133 @@ const HOUR_RECOMMENDATIONS: Record<string, { text: string; ritualId: string | nu
   Saturn:  { text: 'Suitable for Saturn Banishing, discipline, and restriction.', ritualId: 'sirp' },
 };
 
-// ─── Element mapping for planets (for Rune Synergy) ─────────
-
-const PLANET_ELEMENTS: Record<string, string> = {
-  Sun: 'fire',
-  Moon: 'water',
-  Mars: 'fire',
-  Mercury: 'air',
-  Jupiter: 'fire',
-  Venus: 'earth',
-  Saturn: 'earth',
-};
-
 // ─── Engine ─────────────────────────────────────────────────
 
 /**
- * Calculate the Astral Potency Report.
+ * Check if a planet "matches" a user intent.
+ * The intent can be 'BANISH', 'INVOKE', or a specific keyword.
+ */
+function planetMatchesIntent(planet: string, userIntent: string | null): boolean {
+  if (!userIntent) return false;
+  const intents = PLANET_INTENTS[planet] ?? [];
+  return intents.some(i => i === userIntent.toUpperCase());
+}
+
+/**
+ * Calculate the Astral Potency Report v2.
  *
  * @param hourInfo - Current planetary hour data
- * @param userLevel - User's current initiation level (0-10)
- * @param stasisActive - Whether user has an active stasis buff
- * @param activeRune - The user's currently equipped rune (or null)
- * @param activeEvents - Currently active global events from CMS
+ * @param userIntent - The user's current ritual intent (BANISH/INVOKE/null)
+ * @param lastSessionTimestamp - Timestamp of last Gnosis or Stasis session (or null)
+ * @param cosmicEvents - Currently active cosmic events from CMS
  */
 export function calculateAstralPotency(
   hourInfo: PlanetaryHourInfo,
-  userLevel: number,
-  stasisActive: boolean,
-  activeRune: SavedRune | null,
-  activeEvents: SanityEvent[],
+  userIntent: string | null,
+  lastSessionTimestamp: number | null,
+  cosmicEvents: SanityCosmicEvent[],
 ): AstralPotencyReport {
   const hourPlanet = hourInfo.currentHour.planet;
-  const dayRuler = hourInfo.dayRuler;
   const planetColor = PLANET_COLORS[hourPlanet] ?? '#D4AF37';
+  const dayRuler = hourInfo.dayRuler;
 
-  // ===== Pillar 1: Adept Potency Score =====
-  const adeptPotency = (1 + userLevel / 10) * (stasisActive ? 1.5 : 1.0);
+  // ===== Base: 60% Unyielding Will =====
+  let potency = 60;
+  const buffs: PotencyBuff[] = [];
 
-  // ===== Pillar 2: Rune Synergy =====
-  let runeSynergy: SynergyLevel = 'LOW';
-  let runeSynergyMultiplier = 1.0;
-  let matchedRuneName = '';
+  buffs.push({
+    id: 'base',
+    label: 'UNYIELDING WILL',
+    value: 60,
+    isBase: true,
+    active: true,
+    color: '#A3A3A3', // Ash Grey
+  });
 
-  if (activeRune && activeRune.runeNames.length > 0) {
-    // Find the first rune in ELDER_FUTHARK that matches any of the active rune's component runes
-    const runeData: Rune | undefined = activeRune.runeNames
-      .map(name => ELDER_FUTHARK.find(r => r.name === name))
-      .find(r => r !== undefined);
+  // ===== +15 if Planetary Hour matches intent =====
+  const hourMatch = planetMatchesIntent(hourPlanet, userIntent);
+  if (hourMatch) potency += 15;
+  buffs.push({
+    id: 'hour',
+    label: 'PLANETARY RESONANCE',
+    value: 15,
+    isBase: false,
+    active: hourMatch,
+    color: '#3B82F6', // Occult Blue
+  });
 
-    if (runeData) {
-      matchedRuneName = activeRune.name || runeData.name;
+  // ===== +5 if Day Ruler matches intent =====
+  const dayMatch = planetMatchesIntent(dayRuler, userIntent);
+  if (dayMatch) potency += 5;
+  buffs.push({
+    id: 'day',
+    label: 'SOLAR DOMINION',
+    value: 5,
+    isBase: false,
+    active: dayMatch,
+    color: '#D4AF37', // Gold
+  });
 
-      // HIGH: Rune's planet matches current hour planet
-      if (runeData.planet === hourPlanet) {
-        runeSynergy = 'HIGH';
-        runeSynergyMultiplier = 1.5;
-      }
-      // MED: Rune's element matches hour ruler's element
-      else {
-        const hourElement = PLANET_ELEMENTS[hourPlanet] ?? '';
-        const runeElement = runeData.element?.toLowerCase() ?? '';
-        if (runeElement && hourElement && runeElement === hourElement) {
-          runeSynergy = 'MED';
-          runeSynergyMultiplier = 1.2;
-        }
+  // ===== +10 if Active Cosmic Event supports intent =====
+  let matchedEvent: SanityCosmicEvent | null = null;
+  for (const evt of cosmicEvents) {
+    if (evt.supportedIntents && userIntent) {
+      const supported = evt.supportedIntents.map((s: string) => s.toUpperCase());
+      if (supported.includes(userIntent.toUpperCase())) {
+        matchedEvent = evt;
+        potency += 10;
+        break;
       }
     }
   }
+  buffs.push({
+    id: 'cosmic',
+    label: 'COSMIC CONJUNCTION',
+    value: 10,
+    isBase: false,
+    active: !!matchedEvent,
+    color: '#D4AF37', // Gold
+  });
 
-  // ===== Pillar 3: Collective Boost =====
-  let collectiveBoost = 1.0;
-  let activeEvent: SanityEvent | null = null;
-  for (const evt of activeEvents) {
-    if (evt.is_active && evt.xp_multiplier && evt.xp_multiplier > collectiveBoost) {
-      collectiveBoost = evt.xp_multiplier;
-      activeEvent = evt;
-    }
-  }
+  // ===== +10 if Recent Gnosis/Stasis (last 6 hours) =====
+  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+  const hasRecentSession = lastSessionTimestamp != null && (Date.now() - lastSessionTimestamp) < SIX_HOURS_MS;
+  if (hasRecentSession) potency += 10;
+  buffs.push({
+    id: 'momentum',
+    label: 'ASTRAL MOMENTUM',
+    value: 10,
+    isBase: false,
+    active: hasRecentSession,
+    color: '#D4AF37', // Gold
+  });
 
-  // ===== Pillar 4: Recommendation =====
+  // Cap at 100
+  potency = Math.min(100, potency);
+
+  // ===== Recommendation =====
   const rec = HOUR_RECOMMENDATIONS[hourPlanet] ?? HOUR_RECOMMENDATIONS.Sun;
 
-  // ===== Composite Potency Score (0-100) =====
-  // Base: 45 + level contribution (up to +20) + synergy bonus (up to +15) + stasis (+10) + event (+15)
-  let rawScore = 45;
-  rawScore += Math.round(userLevel * 2); // 0-20 from level
-  rawScore += runeSynergy === 'HIGH' ? 15 : runeSynergy === 'MED' ? 8 : 0;
-  rawScore += stasisActive ? 10 : 0;
-  rawScore += activeEvent ? Math.min(15, Math.round((collectiveBoost - 1) * 30)) : 0;
-  const potencyScore = Math.max(0, Math.min(100, rawScore));
-
-  // ===== Text Synthesis =====
-  let priority: 1 | 2 | 3 = 3;
-  let headline = '';
-  let message = '';
-
-  const dayRulerInfo = DAY_RULERS[new Date().getDay()];
-  const dayRulerName = dayRulerInfo?.planet ?? dayRuler;
-  const userStatusText = stasisActive
-    ? 'Your mind is focused.'
-    : 'A stasis session would optimize your potential.';
-
-  // PRIO 1: Global Event active
-  if (activeEvent && collectiveBoost > 1) {
-    priority = 1;
-    headline = `COSMIC EVENT: ${activeEvent.title}`;
-    message = `A collective current has formed. ${rec.text} (Bonus: ${collectiveBoost}x XP)`;
-  }
-  // PRIO 2: High Rune Synergy
-  else if (runeSynergy === 'HIGH' && matchedRuneName) {
-    priority = 2;
-    headline = 'Perfect Alignment!';
-    message = `Your Rune ${matchedRuneName} resonates with the ${hourPlanet} hour. ${rec.text} Your potency is at ${potencyScore}%.`;
-  }
-  // PRIO 3: Standard
-  else {
-    priority = 3;
+  // ===== Headline =====
+  let headline: string;
+  if (matchedEvent) {
+    headline = `COSMIC EVENT: ${matchedEvent.title}`;
+  } else if (potency >= 85) {
+    headline = 'SUPREME ALIGNMENT';
+  } else if (potency >= 75) {
+    headline = 'STRONG RESONANCE';
+  } else {
     headline = `Hour of ${hourPlanet}`;
-    message = `We are currently in the ${hourPlanet} hour on the day of ${dayRulerName}. ${userStatusText} ${rec.text}`;
   }
 
   return {
-    priority,
-    headline,
-    message,
-    recommendation: rec.text,
-    suggestedRitualId: rec.ritualId,
+    potencyScore: potency,
+    buffs,
     hourPlanet,
     planetColor,
-    potencyScore,
-    breakdown: {
-      adeptPotency: Math.round(adeptPotency * 100) / 100,
-      runeSynergy,
-      runeSynergyMultiplier,
-      collectiveBoost,
-      stasisActive,
-    },
+    headline,
+    recommendation: rec.text,
+    suggestedRitualId: rec.ritualId,
+    activeCosmicEvent: matchedEvent,
   };
 }

@@ -675,3 +675,51 @@
 - [x] Add zIndex: 10 on rune container to ensure visibility above aura rings
 - [x] Verify stroke color #D4AF37 is still explicitly set
 - [x] Rune visible and centered on Gnosis trance screen
+
+## Session 19 – Potency Engine Rewrite, Buff HUD, CMS Cosmic Events, Moon Intel Modal
+
+### Potency Engine Rewrite
+- [x] Base willpower NEVER below 60% (let potency = 60)
+- [x] Additive logic: +15 if planetaryHourMatchesIntent
+- [x] Additive logic: +5 if dayRulerMatchesIntent
+- [x] Additive logic: +10 if activeCosmicEvent.supportedIntents includes userIntent
+- [x] Additive logic: +10 if hasRecentGnosisOrStasis (last 6 hours)
+- [x] Max potency capped at 100
+
+### RPG Buff HUD (Alignment Card Redesign)
+- [x] Remove old static descriptive text paragraph
+- [x] Vertical "Active Buffs" list mapping Potency Engine logic
+- [x] Each buff: [Value] left, Buff Name right
+- [x] BASE 60% UNYIELDING WILL (Ash Grey, always shown)
+- [x] +15% PLANETARY RESONANCE (if planetary hour matches)
+- [x] +5% SOLAR DOMINION (if day ruler matches)
+- [x] +10% ASTRAL MOMENTUM (if recent Gnosis/Stasis)
+- [x] +10% COSMIC CONJUNCTION (if CMS event matches)
+- [x] Only render active buffs (except Base which always shows)
+- [x] RPG "Mana/Energy" style progress bar starting at 60% minimum
+- [x] Bold total percentage on right (e.g. "85% POTENCY")
+- [x] Buff values as glowing terminal tags (JetBrainsMono, rgba gold bg)
+- [x] Buff names in Cinzel or clean sans-serif
+
+### Sanity CMS: cosmicEvent Integration
+- [x] Add SanityCosmicEvent type with magickalDirective, warning, supportedIntents
+- [x] Add GROQ query to fetch active cosmicEvent documents
+- [x] Match live astrological data with CMS entries
+- [x] Inject magickalDirective and warning into app state
+
+### Event Modal Upgrade
+- [x] Display magickalDirective from CMS under [MAGICKAL DIRECTIVE] header
+- [x] Display warning from CMS
+- [x] JetBrainsMono Gold for directive header
+- [x] Hide dry astronomical separation data
+
+### Moon Intel Modal
+- [x] Make Moon Phase tile interactive (onPress)
+- [x] Dark-themed modal with phase name in Cinzel
+- [x] [CURRENT STATE] section: Illumination, Zodiac sign
+- [x] [MAGICKAL AFFINITY] section: what intents this phase supports
+- [x] Phase-specific magickal recommendations
+
+### Aesthetics
+- [x] Vantablack (#050505) backgrounds throughout
+- [x] Cyber-Occult aesthetic strict adherence

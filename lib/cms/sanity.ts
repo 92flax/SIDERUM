@@ -100,6 +100,25 @@ export interface SanityEvent {
   is_active?: boolean;
 }
 
+/** Cosmic Event from CMS – occult interpretation of astrological aspects */
+export interface SanityCosmicEvent {
+  _id: string;
+  _type: 'cosmicEvent';
+  title: string;
+  /** The astrological aspect this event interprets (e.g. "Mercury conjunct Venus") */
+  aspectKey?: string;
+  /** Occult interpretation / magickal directive */
+  magickalDirective?: string;
+  /** Warning or caution for the practitioner */
+  warning?: string;
+  /** Intents this cosmic event supports (e.g. ["INVOKE", "LOVE", "COMMUNICATION"]) */
+  supportedIntents?: string[];
+  /** Whether this event is currently active */
+  is_active?: boolean;
+  start_date?: string;
+  end_date?: string;
+}
+
 // ─── GROQ Fetch Functions ────────────────────────────────────
 
 /**
@@ -265,6 +284,33 @@ export async function getBreathingRhythms(): Promise<SanityBreathingRhythm[]> {
     return results;
   } catch (error) {
     console.warn('[Sanity] Failed to fetch breathing rhythms:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch active cosmic events from CMS.
+ * These provide occult interpretations for astrological aspects.
+ */
+export async function getCosmicEvents(): Promise<SanityCosmicEvent[]> {
+  const query = `*[_type == "cosmicEvent" && is_active == true] {
+    _id,
+    _type,
+    title,
+    aspectKey,
+    magickalDirective,
+    warning,
+    supportedIntents,
+    is_active,
+    start_date,
+    end_date
+  }`;
+
+  try {
+    const results = await client.fetch<SanityCosmicEvent[]>(query);
+    return results;
+  } catch (error) {
+    console.warn('[Sanity] Failed to fetch cosmic events:', error);
     return [];
   }
 }
