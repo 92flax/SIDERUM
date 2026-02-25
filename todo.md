@@ -643,3 +643,14 @@
 ### Timer & Button Refinement
 - [x] Timer text larger, JetBrainsMono, pure white/light grey
 - [x] END SESSION: ghost button (dark grey border, no solid fill)
+
+## Session 16 – Astral Archives Bugfixes
+
+### Record Detail View
+- [x] Tapping a record in Chronicle or Query Results opens full journal entry detail
+- [x] Detail view shows all fields: date, ritual, variant, intent, resonance, notes, planetary hour, moon phase, aspects
+
+### Devotion Matrix Heatmap
+- [x] Fix: Rituals not showing on the Devotion Matrix
+- [x] Ensure journal entries are correctly mapped to heatmap date cells
+- [x] Verify date key format matches between journal store and matrix generation

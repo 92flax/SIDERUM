@@ -8,7 +8,10 @@ import { describe, it, expect } from 'vitest';
 // ─── Inline helpers (mirroring component logic) ─────────────
 
 function getDateKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 type Filters = {
@@ -52,10 +55,12 @@ const DAYS_IN_WEEK = 7;
 function generateMatrixDates(): string[][] {
   const weeks: string[][] = [];
   const today = new Date();
-  const totalDays = WEEKS_TO_SHOW * DAYS_IN_WEEK;
-  const startDate = new Date(today);
-  startDate.setDate(startDate.getDate() - totalDays + 1);
-  startDate.setDate(startDate.getDate() - startDate.getDay());
+  // End on Saturday of current week so today is always included
+  const endOfWeek = new Date(today);
+  endOfWeek.setDate(endOfWeek.getDate() + (6 - endOfWeek.getDay()));
+  // Go back WEEKS_TO_SHOW weeks from end to get start (always a Sunday)
+  const startDate = new Date(endOfWeek);
+  startDate.setDate(startDate.getDate() - WEEKS_TO_SHOW * DAYS_IN_WEEK + 1);
 
   for (let w = 0; w < WEEKS_TO_SHOW; w++) {
     const week: string[] = [];
@@ -115,7 +120,8 @@ describe('Astral Archives – Date Helpers', () => {
   });
 
   it('getDateKey handles midnight correctly', () => {
-    const date = new Date('2026-01-01T00:00:00.000Z');
+    // Use local midnight to avoid UTC offset issues
+    const date = new Date(2026, 0, 1, 0, 0, 0);
     expect(getDateKey(date)).toBe('2026-01-01');
   });
 });
@@ -214,22 +220,27 @@ describe('Astral Archives – Devotion Matrix', () => {
     const weeks = generateMatrixDates();
     const allDates = weeks.flat();
     for (let i = 1; i < allDates.length; i++) {
-      const prev = new Date(allDates[i - 1] + 'T12:00:00Z');
-      const curr = new Date(allDates[i] + 'T12:00:00Z');
+      const prev = new Date(allDates[i - 1] + 'T12:00:00');
+      const curr = new Date(allDates[i] + 'T12:00:00');
       const diffMs = curr.getTime() - prev.getTime();
       const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
       expect(diffDays).toBe(1);
     }
   });
 
+  it('matrix includes today', () => {
+    const weeks = generateMatrixDates();
+    const allDates = weeks.flat();
+    const today = getDateKey(new Date());
+    expect(allDates).toContain(today);
+  });
+
   it('last week of matrix includes recent dates', () => {
     const weeks = generateMatrixDates();
     const lastWeek = weeks[weeks.length - 1];
-    // The last week should contain dates near today
     const today = new Date();
-    const lastDate = new Date(lastWeek[lastWeek.length - 1] + 'T12:00:00Z');
+    const lastDate = new Date(lastWeek[lastWeek.length - 1] + 'T12:00:00');
     const diffDays = Math.abs((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-    // Last date should be within 7 days of today
     expect(diffDays).toBeLessThan(8);
   });
 

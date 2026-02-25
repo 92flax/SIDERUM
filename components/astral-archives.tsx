@@ -39,6 +39,10 @@ const INTENSITY_LABELS: Record<ExperienceIntensity, string> = {
   1: 'Faint', 2: 'Mild', 3: 'Moderate', 4: 'Strong', 5: 'Profound',
 };
 
+const CONDITION_LABELS: Record<string, string> = {
+  excellent: 'Excellent', good: 'Good', neutral: 'Neutral', tired: 'Tired', poor: 'Poor',
+};
+
 type ArchiveTab = 'chronicle' | 'chronos';
 
 // ─── Devotion Matrix Helpers ────────────────────────────────
@@ -48,18 +52,31 @@ const CELL_SIZE = Math.floor((SW - 72) / WEEKS_TO_SHOW); // Responsive cell size
 const CELL_GAP = 2;
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
+/** Get local YYYY-MM-DD key from a Date (avoids UTC offset issues) */
 function getDateKey(date: Date): string {
-  return date.toISOString().slice(0, 10); // YYYY-MM-DD
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** Get local YYYY-MM-DD key from an ISO string without creating a UTC-shifted Date */
+function getEntryDateKey(isoString: string): string {
+  // createdAt is stored as new Date().toISOString() which is UTC
+  // We parse it back and use local date
+  const date = new Date(isoString);
+  return getDateKey(date);
 }
 
 function generateMatrixDates(): string[][] {
   const weeks: string[][] = [];
   const today = new Date();
-  const totalDays = WEEKS_TO_SHOW * DAYS_IN_WEEK;
-  const startDate = new Date(today);
-  startDate.setDate(startDate.getDate() - totalDays + 1);
-  // Align to Sunday
-  startDate.setDate(startDate.getDate() - startDate.getDay());
+  // End on Saturday of current week so today is always included
+  const endOfWeek = new Date(today);
+  endOfWeek.setDate(endOfWeek.getDate() + (6 - endOfWeek.getDay()));
+  // Go back WEEKS_TO_SHOW weeks from end to get start (always a Sunday)
+  const startDate = new Date(endOfWeek);
+  startDate.setDate(startDate.getDate() - WEEKS_TO_SHOW * DAYS_IN_WEEK + 1);
 
   for (let w = 0; w < WEEKS_TO_SHOW; w++) {
     const week: string[] = [];
@@ -101,6 +118,188 @@ function entryMatchesFilters(entry: JournalEntry, filters: Filters): boolean {
 }
 
 // ============================================================
+// ENTRY DETAIL MODAL
+// ============================================================
+
+function EntryDetailModal({
+  entry,
+  visible,
+  onClose,
+}: {
+  entry: JournalEntry | null;
+  visible: boolean;
+  onClose: () => void;
+}) {
+  if (!entry) return null;
+
+  const dateStr = new Date(entry.createdAt).toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  });
+  const timeStr = new Date(entry.createdAt).toLocaleTimeString('en-US', {
+    hour: '2-digit', minute: '2-digit',
+  });
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={ds.overlay}>
+        <View style={ds.content}>
+          <View style={ds.handle} />
+
+          {/* Close button */}
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => [ds.closeBtn, pressed && { opacity: 0.6 }]}
+          >
+            <Text style={ds.closeBtnText}>✕</Text>
+          </Pressable>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ds.scrollContent}>
+            {/* Header */}
+            <Text style={ds.title}>
+              {entry.isManualEntry ? '✧ MANUAL ENTRY' : entry.ritualName?.toUpperCase() ?? 'UNKNOWN RITUAL'}
+            </Text>
+            <Text style={ds.dateText}>{dateStr} · {timeStr}</Text>
+
+            {/* Intent Badge */}
+            {entry.intent && (
+              <View style={[ds.intentBadge, {
+                backgroundColor: entry.intent === 'BANISH' ? '#00CCCC10' : '#D4AF3710',
+                borderColor: entry.intent === 'BANISH' ? '#00CCCC30' : '#D4AF3730',
+              }]}>
+                <Text style={[ds.intentText, {
+                  color: entry.intent === 'BANISH' ? '#00CCCC' : GOLD,
+                }]}>
+                  {entry.intent === 'BANISH' ? '↑ BANISH' : '↓ INVOKE'}
+                </Text>
+              </View>
+            )}
+
+            {/* Dynamic Selection / Variant */}
+            {entry.dynamicSelection && (
+              <View style={ds.fieldRow}>
+                <Text style={ds.fieldLabel}>VARIANT</Text>
+                <Text style={ds.fieldValue}>{entry.dynamicSelection}</Text>
+              </View>
+            )}
+
+            {/* Steps */}
+            {entry.totalSteps > 0 && (
+              <View style={ds.fieldRow}>
+                <Text style={ds.fieldLabel}>STEPS</Text>
+                <Text style={ds.fieldValue}>{entry.stepsCompleted} / {entry.totalSteps}</Text>
+              </View>
+            )}
+
+            {/* XP */}
+            {entry.xpAwarded > 0 && (
+              <View style={ds.fieldRow}>
+                <Text style={ds.fieldLabel}>XP AWARDED</Text>
+                <Text style={[ds.fieldValue, { color: GOLD }]}>+{entry.xpAwarded}</Text>
+              </View>
+            )}
+
+            {/* Divider */}
+            <View style={ds.divider} />
+
+            {/* Planetary Data */}
+            <Text style={ds.sectionTitle}>COSMIC ALIGNMENT</Text>
+
+            <View style={ds.fieldRow}>
+              <Text style={ds.fieldLabel}>RULER OF DAY</Text>
+              <Text style={ds.fieldValue}>
+                {PLANET_SYMBOL_MAP[entry.rulerOfDay] ?? ''} {entry.rulerOfDay}
+              </Text>
+            </View>
+
+            <View style={ds.fieldRow}>
+              <Text style={ds.fieldLabel}>PLANETARY HOUR</Text>
+              <Text style={ds.fieldValue}>
+                {PLANET_SYMBOL_MAP[entry.rulerOfHour] ?? ''} {entry.rulerOfHour}
+              </Text>
+            </View>
+
+            <View style={ds.fieldRow}>
+              <Text style={ds.fieldLabel}>MOON PHASE</Text>
+              <Text style={ds.fieldValue}>{entry.moonPhase}</Text>
+            </View>
+
+            {/* Active Aspects */}
+            {entry.activeAspects && entry.activeAspects.length > 0 && (
+              <View style={ds.aspectsSection}>
+                <Text style={ds.fieldLabel}>ACTIVE ASPECTS</Text>
+                {entry.activeAspects.map((aspect, i) => (
+                  <Text key={i} style={ds.aspectText}>{aspect}</Text>
+                ))}
+              </View>
+            )}
+
+            {/* Divider */}
+            <View style={ds.divider} />
+
+            {/* User Input */}
+            <Text style={ds.sectionTitle}>PRACTITIONER NOTES</Text>
+
+            {/* Resonance */}
+            {entry.experienceIntensity && (
+              <View style={ds.fieldRow}>
+                <Text style={ds.fieldLabel}>RESONANCE</Text>
+                <View style={ds.resonanceRow}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Text key={star} style={{
+                      fontSize: 16,
+                      color: star <= entry.experienceIntensity! ? GOLD : '#2A2A2A',
+                    }}>✦</Text>
+                  ))}
+                  <Text style={ds.resonanceLabel}>
+                    {INTENSITY_LABELS[entry.experienceIntensity]}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Condition */}
+            {entry.dailyCondition && (
+              <View style={ds.fieldRow}>
+                <Text style={ds.fieldLabel}>CONDITION</Text>
+                <Text style={ds.fieldValue}>{CONDITION_LABELS[entry.dailyCondition] ?? entry.dailyCondition}</Text>
+              </View>
+            )}
+
+            {/* Feeling */}
+            {entry.feeling && (
+              <View style={ds.fieldRow}>
+                <Text style={ds.fieldLabel}>FEELING</Text>
+                <Text style={ds.fieldValue}>{entry.feeling}</Text>
+              </View>
+            )}
+
+            {/* Notes */}
+            {entry.notes ? (
+              <View style={ds.notesSection}>
+                <Text style={ds.fieldLabel}>NOTES</Text>
+                <Text style={ds.notesText}>{entry.notes}</Text>
+              </View>
+            ) : (
+              <View style={ds.fieldRow}>
+                <Text style={ds.fieldLabel}>NOTES</Text>
+                <Text style={[ds.fieldValue, { color: TEXT_DIM }]}>No notes recorded</Text>
+              </View>
+            )}
+
+            {/* Meta */}
+            <View style={ds.metaRow}>
+              {entry.isAutoOnly && <Text style={ds.metaTag}>AUTO-CAPTURED</Text>}
+              {entry.isManualEntry && <Text style={ds.metaTag}>MANUAL ENTRY</Text>}
+              <Text style={ds.metaId}>ID: {entry.id.slice(0, 12)}</Text>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ============================================================
 // MAIN COMPONENT
 // ============================================================
 
@@ -116,12 +315,18 @@ export function AstralArchives({ onBack }: AstralArchivesProps) {
 
   const [activeTab, setActiveTab] = useState<ArchiveTab>('chronicle');
   const [showPaywall, setShowPaywall] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
 
   useEffect(() => { loadEntries(); }, []);
 
   const handleTabSwitch = useCallback((tab: ArchiveTab) => {
     if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActiveTab(tab);
+  }, []);
+
+  const handleEntryPress = useCallback((entry: JournalEntry) => {
+    if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedEntry(entry);
   }, []);
 
   return (
@@ -166,14 +371,22 @@ export function AstralArchives({ onBack }: AstralArchivesProps) {
 
       {/* Tab Content */}
       {activeTab === 'chronicle' ? (
-        <ChronicleTab entries={entries} />
+        <ChronicleTab entries={entries} onEntryPress={handleEntryPress} />
       ) : (
         <ChronosEngineTab
           entries={entries}
           isPro={isPro}
           onShowPaywall={() => setShowPaywall(true)}
+          onEntryPress={handleEntryPress}
         />
       )}
+
+      {/* Entry Detail Modal */}
+      <EntryDetailModal
+        entry={selectedEntry}
+        visible={!!selectedEntry}
+        onClose={() => setSelectedEntry(null)}
+      />
 
       {/* Paywall Modal */}
       <ChronosPaywallModal
@@ -188,14 +401,23 @@ export function AstralArchives({ onBack }: AstralArchivesProps) {
 // TAB 1: CHRONICLE (Free Tier)
 // ============================================================
 
-function ChronicleTab({ entries }: { entries: JournalEntry[] }) {
+function ChronicleTab({
+  entries,
+  onEntryPress,
+}: {
+  entries: JournalEntry[];
+  onEntryPress: (entry: JournalEntry) => void;
+}) {
   const sorted = useMemo(() =>
     [...entries].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [entries]
   );
 
   const renderEntry = useCallback(({ item }: { item: JournalEntry }) => (
-    <View style={s.chronicleCard}>
+    <Pressable
+      onPress={() => onEntryPress(item)}
+      style={({ pressed }) => [s.chronicleCard, pressed && { opacity: 0.7, transform: [{ scale: 0.98 }] }]}
+    >
       {/* Date Row */}
       <View style={s.chronicleDateRow}>
         <Text style={s.chronicleDate}>
@@ -262,8 +484,11 @@ function ChronicleTab({ entries }: { entries: JournalEntry[] }) {
       ) : item.isAutoOnly ? (
         <Text style={s.chronicleAutoTag}>Auto-captured</Text>
       ) : null}
-    </View>
-  ), []);
+
+      {/* Tap indicator */}
+      <Text style={s.tapHint}>Tap to view details →</Text>
+    </Pressable>
+  ), [onEntryPress]);
 
   return (
     <FlatList
@@ -291,10 +516,12 @@ function ChronosEngineTab({
   entries,
   isPro,
   onShowPaywall,
+  onEntryPress,
 }: {
   entries: JournalEntry[];
   isPro: boolean;
   onShowPaywall: () => void;
+  onEntryPress: (entry: JournalEntry) => void;
 }) {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -317,11 +544,11 @@ function ChronosEngineTab({
     };
   }, [entries]);
 
-  // Build date→entries map
+  // Build date→entries map using LOCAL date keys
   const dateMap = useMemo(() => {
     const map: Record<string, JournalEntry[]> = {};
     for (const e of entries) {
-      const key = getDateKey(new Date(e.createdAt));
+      const key = getEntryDateKey(e.createdAt);
       if (!map[key]) map[key] = [];
       map[key].push(e);
     }
@@ -337,7 +564,7 @@ function ChronosEngineTab({
 
     // Apply date filter from matrix tap
     if (selectedDate) {
-      result = result.filter(e => getDateKey(new Date(e.createdAt)) === selectedDate);
+      result = result.filter(e => getEntryDateKey(e.createdAt) === selectedDate);
     }
 
     // Apply filter terminal filters
@@ -439,6 +666,8 @@ function ChronosEngineTab({
   }
 
   // ─── Full Pro Content ─────────────────────────────────────
+  const todayKey = getDateKey(new Date());
+
   return (
     <ScrollView
       style={s.chronosContainer}
@@ -504,7 +733,12 @@ function ChronosEngineTab({
 
       {/* ── DEVOTION MATRIX ────────────────────────────────── */}
       <View style={s.matrixSection}>
-        <Text style={s.matrixTitle}>DEVOTION MATRIX</Text>
+        <View style={s.matrixHeaderRow}>
+          <Text style={s.matrixTitle}>DEVOTION MATRIX</Text>
+          <Text style={s.matrixEntryCount}>
+            {entries.length} total {entries.length === 1 ? 'entry' : 'entries'}
+          </Text>
+        </View>
 
         {/* Day labels */}
         <View style={s.matrixContainer}>
@@ -526,8 +760,7 @@ function ChronosEngineTab({
                   {week.map((dateKey, di) => {
                     const status = dateMatchesFilters(dateKey);
                     const isSelected = selectedDate === dateKey;
-                    const today = getDateKey(new Date());
-                    const isFuture = dateKey > today;
+                    const isFuture = dateKey > todayKey;
                     const entryCount = dateMap[dateKey]?.length ?? 0;
 
                     let cellColor = '#111111'; // empty
@@ -570,6 +803,16 @@ function ChronosEngineTab({
           </ScrollView>
         </View>
 
+        {/* Legend */}
+        <View style={s.matrixLegend}>
+          <Text style={s.legendLabel}>Less</Text>
+          <View style={[s.legendCell, { backgroundColor: '#111111' }]} />
+          <View style={[s.legendCell, { backgroundColor: '#6B5B1F' }]} />
+          <View style={[s.legendCell, { backgroundColor: '#B8941F' }]} />
+          <View style={[s.legendCell, { backgroundColor: GOLD }]} />
+          <Text style={s.legendLabel}>More</Text>
+        </View>
+
         {/* Selected date indicator */}
         {selectedDate && (
           <View style={s.selectedDateBadge}>
@@ -577,6 +820,9 @@ function ChronosEngineTab({
               {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', {
                 weekday: 'short', month: 'short', day: 'numeric',
               })}
+            </Text>
+            <Text style={s.selectedDateCount}>
+              {dateMap[selectedDate]?.length ?? 0} {(dateMap[selectedDate]?.length ?? 0) === 1 ? 'entry' : 'entries'}
             </Text>
             <Pressable
               onPress={() => { setSelectedDate(null); if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
@@ -601,7 +847,11 @@ function ChronosEngineTab({
           </View>
         ) : (
           queryResults.map((item) => (
-            <View key={item.id} style={s.queryCard}>
+            <Pressable
+              key={item.id}
+              onPress={() => onEntryPress(item)}
+              style={({ pressed }) => [s.queryCard, pressed && { opacity: 0.7, transform: [{ scale: 0.98 }] }]}
+            >
               <View style={s.queryCardHeader}>
                 <Text style={s.queryCardDate}>
                   {new Date(item.createdAt).toLocaleDateString('en-US', {
@@ -647,7 +897,8 @@ function ChronosEngineTab({
               {item.notes ? (
                 <Text style={s.queryCardNotes} numberOfLines={2}>{item.notes}</Text>
               ) : null}
-            </View>
+              <Text style={s.tapHintSmall}>Tap to view →</Text>
+            </Pressable>
           ))
         )}
       </View>
@@ -692,7 +943,7 @@ function FilterRow({
       </Pressable>
 
       {isExpanded && (
-        <View style={s.filterDropdown}>
+        <ScrollView style={s.filterDropdown} nestedScrollEnabled showsVerticalScrollIndicator={false}>
           {/* "ALL" option */}
           <Pressable
             onPress={() => onSelect(null)}
@@ -726,7 +977,7 @@ function FilterRow({
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
       )}
     </View>
   );
@@ -862,6 +1113,14 @@ const s = StyleSheet.create({
   resonanceIntensityLabel: { fontFamily: 'JetBrainsMono', fontSize: 9, color: TEXT_MUTED },
   chronicleNotes: { fontSize: 12, color: TEXT_MUTED, marginTop: 8, lineHeight: 18, fontStyle: 'italic' },
   chronicleAutoTag: { fontFamily: 'JetBrainsMono', fontSize: 9, color: TEXT_DIM, marginTop: 6, letterSpacing: 1 },
+  tapHint: {
+    fontFamily: 'JetBrainsMono', fontSize: 8, color: '#333',
+    letterSpacing: 1, marginTop: 8, textAlign: 'right',
+  },
+  tapHintSmall: {
+    fontFamily: 'JetBrainsMono', fontSize: 7, color: '#333',
+    letterSpacing: 1, marginTop: 6, textAlign: 'right',
+  },
 
   // Empty State
   emptyState: { alignItems: 'center', paddingTop: 60 },
@@ -920,9 +1179,16 @@ const s = StyleSheet.create({
 
   // Devotion Matrix
   matrixSection: { marginBottom: 16 },
+  matrixHeaderRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: 10,
+  },
   matrixTitle: {
     fontFamily: 'JetBrainsMono', fontSize: 10, color: TEXT_DIM,
-    letterSpacing: 2, marginBottom: 10,
+    letterSpacing: 2,
+  },
+  matrixEntryCount: {
+    fontFamily: 'JetBrainsMono', fontSize: 9, color: TEXT_DIM,
   },
   matrixContainer: { flexDirection: 'row' },
   dayLabelsCol: { marginRight: 4 },
@@ -935,6 +1201,14 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: GOLD,
   },
 
+  // Matrix Legend
+  matrixLegend: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+    gap: 4, marginTop: 8,
+  },
+  legendLabel: { fontFamily: 'JetBrainsMono', fontSize: 7, color: TEXT_DIM },
+  legendCell: { width: 10, height: 10, borderRadius: 2 },
+
   // Selected Date Badge
   selectedDateBadge: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -944,6 +1218,7 @@ const s = StyleSheet.create({
     alignSelf: 'center',
   },
   selectedDateText: { fontFamily: 'JetBrainsMono', fontSize: 11, color: GOLD, letterSpacing: 0.5 },
+  selectedDateCount: { fontFamily: 'JetBrainsMono', fontSize: 9, color: TEXT_MUTED },
   selectedDateClear: { fontSize: 12, color: TEXT_MUTED },
 
   // Query Results
@@ -1034,4 +1309,119 @@ const s = StyleSheet.create({
   modalUpgradeBtnText: { color: VANTA, fontSize: 16, fontWeight: '700', letterSpacing: 1 },
   modalCloseBtn: { marginTop: 12, paddingVertical: 8 },
   modalCloseBtnText: { fontSize: 14, color: TEXT_MUTED },
+});
+
+// ============================================================
+// DETAIL MODAL STYLES
+// ============================================================
+
+const ds = StyleSheet.create({
+  overlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'flex-end',
+  },
+  content: {
+    backgroundColor: '#0A0A0A',
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    borderWidth: 1, borderColor: '#D4AF3730',
+    maxHeight: '90%',
+    paddingTop: 12,
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: '#D4AF3740',
+    alignSelf: 'center', marginBottom: 8,
+  },
+  closeBtn: {
+    position: 'absolute', top: 16, right: 20, zIndex: 10,
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#1A1A1A', alignItems: 'center', justifyContent: 'center',
+  },
+  closeBtnText: { fontSize: 14, color: TEXT_MUTED },
+  scrollContent: {
+    paddingHorizontal: 24, paddingTop: 8, paddingBottom: 40,
+  },
+
+  // Header
+  title: {
+    fontFamily: 'Cinzel', fontSize: 18, color: GOLD,
+    letterSpacing: 2, marginBottom: 4, paddingRight: 40,
+  },
+  dateText: {
+    fontFamily: 'JetBrainsMono', fontSize: 11, color: TEXT_MUTED,
+    letterSpacing: 0.5, marginBottom: 12,
+  },
+
+  // Intent Badge
+  intentBadge: {
+    alignSelf: 'flex-start', borderWidth: 1, borderRadius: 6,
+    paddingHorizontal: 10, paddingVertical: 4, marginBottom: 16,
+  },
+  intentText: {
+    fontFamily: 'JetBrainsMono', fontSize: 10, fontWeight: '700', letterSpacing: 1.5,
+  },
+
+  // Field Rows
+  fieldRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: '#151515',
+  },
+  fieldLabel: {
+    fontFamily: 'JetBrainsMono', fontSize: 9, color: TEXT_DIM,
+    letterSpacing: 2, textTransform: 'uppercase',
+  },
+  fieldValue: {
+    fontFamily: 'JetBrainsMono', fontSize: 12, color: TEXT_PRIMARY,
+    letterSpacing: 0.5, textAlign: 'right', flex: 1, marginLeft: 16,
+  },
+
+  // Sections
+  divider: {
+    height: 1, backgroundColor: '#1A1A1A', marginVertical: 16,
+  },
+  sectionTitle: {
+    fontFamily: 'JetBrainsMono', fontSize: 10, color: GOLD,
+    letterSpacing: 2, marginBottom: 8, fontWeight: '700',
+  },
+
+  // Aspects
+  aspectsSection: {
+    paddingVertical: 8,
+  },
+  aspectText: {
+    fontFamily: 'JetBrainsMono', fontSize: 11, color: TEXT_MUTED,
+    marginTop: 4, letterSpacing: 0.5,
+  },
+
+  // Resonance
+  resonanceRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    flex: 1, justifyContent: 'flex-end',
+  },
+  resonanceLabel: {
+    fontFamily: 'JetBrainsMono', fontSize: 10, color: TEXT_MUTED,
+    marginLeft: 6,
+  },
+
+  // Notes
+  notesSection: {
+    paddingVertical: 8,
+  },
+  notesText: {
+    fontFamily: 'JetBrainsMono', fontSize: 12, color: TEXT_PRIMARY,
+    lineHeight: 20, marginTop: 8, fontStyle: 'italic',
+  },
+
+  // Meta
+  metaRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginTop: 20, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: '#151515',
+  },
+  metaTag: {
+    fontFamily: 'JetBrainsMono', fontSize: 8, color: TEXT_DIM,
+    letterSpacing: 1.5, backgroundColor: '#151515',
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+  },
+  metaId: {
+    fontFamily: 'JetBrainsMono', fontSize: 8, color: '#2A2A2A',
+    letterSpacing: 0.5, marginLeft: 'auto',
+  },
 });
