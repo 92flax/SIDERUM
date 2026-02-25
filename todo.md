@@ -507,3 +507,25 @@
 - [x] Statistics: ritual frequency per ritual, results by planetary day/hour
 - [x] Correlation view: planetary rulers vs user-reported intensity/results
 - [x] Elegant dark esoteric UI matching ÆONIS aesthetic
+
+## Multiple UI/UX Improvements (Session 7)
+
+### Header: CMS Level + Mage Name
+- [x] Load user rank/level title from CMS level configuration
+- [x] Display mage name (from onboarding) in header after ÆONIS
+- [x] Display rank/level title before XP display in header
+
+### Alignment Potency Base 45%
+- [x] Change alignment potency calculation so base value starts at 45% (currently 0%)
+- [x] Higher values should be more easily achievable
+
+### Astral Journal Enhancements
+- [x] Record moon phase alongside element in journal entries
+- [x] Display aspects as text in addition to symbols
+- [x] Add "Feeling" dropdown field (Heat, Cold, Tingling, Pressure, Lightness, Heaviness, Vibration, Calm, Anxiety, Euphoria, None)
+
+### Stasis Circle Fix
+- [x] Progress ring (white filling circle) must wrap AROUND the breathing circle, not inside it
+- [x] Both circles scale together: smaller on exhale, larger on inhale
+- [x] Must not overlap control or information elements
+- [x] Phase timing fill animation continues as before

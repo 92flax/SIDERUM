@@ -13,6 +13,13 @@ const JOURNAL_KEY = '@aeonis_astral_journal';
 export type ExperienceIntensity = 1 | 2 | 3 | 4 | 5;
 export type DailyCondition = 'excellent' | 'good' | 'neutral' | 'tired' | 'poor';
 
+export type RitualFeeling = 'Heat' | 'Cold' | 'Tingling' | 'Pressure' | 'Lightness' | 'Heaviness' | 'Vibration' | 'Calm' | 'Anxiety' | 'Euphoria' | 'None';
+
+export const RITUAL_FEELINGS: RitualFeeling[] = [
+  'Heat', 'Cold', 'Tingling', 'Pressure', 'Lightness',
+  'Heaviness', 'Vibration', 'Calm', 'Anxiety', 'Euphoria', 'None',
+];
+
 export interface JournalEntry {
   id: string;
   createdAt: string; // ISO date string
@@ -33,6 +40,7 @@ export interface JournalEntry {
   notes: string;
   experienceIntensity: ExperienceIntensity | null;
   dailyCondition: DailyCondition | null;
+  feeling: RitualFeeling | null;
   // Meta
   isAutoOnly: boolean; // true if user skipped manual input
   isManualEntry: boolean; // true if created manually (not after ritual)
@@ -82,6 +90,7 @@ interface JournalState {
     notes: string,
     intensity: ExperienceIntensity | null,
     condition: DailyCondition | null,
+    feeling?: RitualFeeling | null,
   ) => Promise<void>;
 
   // Save auto-only entry (user skipped)
@@ -151,7 +160,7 @@ export const useJournalStore = create<JournalState>((set, get) => ({
     set({ showPostRitualCapture: false, pendingData: null });
   },
 
-  saveFullEntry: async (notes, intensity, condition) => {
+  saveFullEntry: async (notes, intensity, condition, feeling) => {
     const { pendingData, entries } = get();
     if (!pendingData) return;
 
@@ -172,6 +181,7 @@ export const useJournalStore = create<JournalState>((set, get) => ({
       notes,
       experienceIntensity: intensity,
       dailyCondition: condition,
+      feeling: feeling ?? null,
       isAutoOnly: false,
       isManualEntry: false,
     };
@@ -202,6 +212,7 @@ export const useJournalStore = create<JournalState>((set, get) => ({
       notes: '',
       experienceIntensity: null,
       dailyCondition: null,
+      feeling: null,
       isAutoOnly: true,
       isManualEntry: false,
     };
@@ -231,6 +242,7 @@ export const useJournalStore = create<JournalState>((set, get) => ({
       notes,
       experienceIntensity: intensity,
       dailyCondition: condition,
+      feeling: null,
       isAutoOnly: false,
       isManualEntry: true,
     };

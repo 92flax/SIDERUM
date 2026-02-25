@@ -24,9 +24,10 @@ import { useRouter } from 'expo-router';
 import { useNatalStore } from '@/lib/store/natal-store';
 import { useRuneWalletStore } from '@/lib/store/rune-wallet';
 import {
-  loadLocalAnalytics, LocalAnalytics, LEVEL_TITLES,
+  loadLocalAnalytics, LocalAnalytics, LEVEL_TITLES as LOCAL_LEVEL_TITLES,
   xpForNextLevel, xpForCurrentLevel,
 } from '@/lib/ritual/completion-handler';
+import { getLevels, type SanityLevelConfig } from '@/lib/cms/sanity';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
@@ -72,17 +73,30 @@ export default function HomeScreen() {
   // Digital Grimoire state
   const [analytics, setAnalytics] = useState<LocalAnalytics | null>(null);
   const [magicName, setMagicName] = useState<string>('');
+  const [cmsLevelTitles, setCmsLevelTitles] = useState<Record<number, string>>({});
   const [stasisBuffActive, setStasisBuffActive] = useState(false);
   const [activeEvents, setActiveEvents] = useState<SanityEvent[]>([]);
   const router = useRouter();
 
-  // Load analytics, magic name, and active events
+  // Load analytics, magic name, CMS levels, and active events
   useEffect(() => {
     loadLocalAnalytics().then(setAnalytics);
     AsyncStorage.getItem(MAGIC_NAME_KEY).then(name => {
       if (name) setMagicName(name);
     });
     getActiveEvents().then(setActiveEvents).catch(() => {});
+    // Load CMS level titles (fall back to local)
+    getLevels().then((levels) => {
+      if (levels.length > 0) {
+        const map: Record<number, string> = {};
+        // Sort by xpThreshold and assign rank index
+        const sorted = [...levels].sort((a, b) => a.xpThreshold - b.xpThreshold);
+        sorted.forEach((lvl, idx) => {
+          map[lvl.rank ?? idx] = lvl.title;
+        });
+        setCmsLevelTitles(map);
+      }
+    }).catch(() => {});
   }, []);
 
   // Check stasis buff
@@ -231,6 +245,9 @@ export default function HomeScreen() {
   const xpNeeded = nextLevelXp - currentLevelXp;
   const xpPercent = xpNeeded > 0 ? Math.min(100, Math.round((xpProgress / xpNeeded) * 100)) : 100;
 
+  // Resolve level title: CMS first, then local fallback
+  const resolvedLevelTitle = cmsLevelTitles[currentLevel] || LOCAL_LEVEL_TITLES[currentLevel] || 'Neophyte';
+
   if (isCalculating || !chartData) {
     return (
       <ScreenContainer>
@@ -272,18 +289,21 @@ export default function HomeScreen() {
           )}
           <View style={styles.xpHeader}>
           <View style={styles.xpHeaderTop}>
-            <View>
-              <Text style={styles.xpMagicName}>
-                {magicName || 'ÆONIS'}
-              </Text>
-              <Text style={styles.xpLevelTitle}>
-                {LEVEL_TITLES[currentLevel] ?? 'Neophyte'} · Lv.{currentLevel}
-              </Text>
+            <View style={styles.xpNameRow}>
+              <Text style={styles.xpBrandLabel}>ÆONIS</Text>
+              {magicName ? (
+                <Text style={styles.xpMagicName}> · {magicName}</Text>
+              ) : null}
             </View>
-            <View style={styles.xpBadge}>
-              <Text style={styles.xpBadgeText}>
-                {(analytics?.xpTotal ?? 0).toLocaleString()} XP
+            <View style={styles.xpRankRow}>
+              <Text style={styles.xpLevelTitle}>
+                {resolvedLevelTitle} · Lv.{currentLevel}
               </Text>
+              <View style={styles.xpBadge}>
+                <Text style={styles.xpBadgeText}>
+                  {(analytics?.xpTotal ?? 0).toLocaleString()} XP
+                </Text>
+              </View>
             </View>
           </View>
           <View style={styles.xpBarTrack}>
@@ -835,13 +855,22 @@ const styles = StyleSheet.create({
     borderRadius: 14, padding: 14, zIndex: 1,
   },
   xpHeaderTop: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    gap: 4,
   },
-  xpMagicName: {
+  xpNameRow: {
+    flexDirection: 'row', alignItems: 'baseline',
+  },
+  xpBrandLabel: {
     fontFamily: 'Cinzel', fontSize: 22, color: '#D4AF37', letterSpacing: 3,
   },
+  xpMagicName: {
+    fontFamily: 'Cinzel', fontSize: 16, color: '#C0C0C0', letterSpacing: 1,
+  },
+  xpRankRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2,
+  },
   xpLevelTitle: {
-    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', marginTop: 2, letterSpacing: 1,
+    fontFamily: 'JetBrainsMono', fontSize: 10, color: '#6B6B6B', letterSpacing: 1,
   },
   xpBadge: {
     backgroundColor: '#D4AF3710', borderWidth: 1, borderColor: '#D4AF3730',

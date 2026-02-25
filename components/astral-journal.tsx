@@ -14,6 +14,8 @@ import {
   type JournalEntry,
   type ExperienceIntensity,
   type DailyCondition,
+  type RitualFeeling,
+  RITUAL_FEELINGS,
 } from '@/lib/journal/store';
 import { calculatePlanetaryHours, calculateMoonPhase } from '@/lib/astro/planetary-hours';
 import { useAstroStore } from '@/lib/astro/store';
@@ -60,6 +62,8 @@ export function PostRitualCapture() {
   const [notes, setNotes] = useState('');
   const [intensity, setIntensity] = useState<ExperienceIntensity | null>(null);
   const [condition, setCondition] = useState<DailyCondition | null>(null);
+  const [feeling, setFeeling] = useState<RitualFeeling | null>(null);
+  const [showFeelingDropdown, setShowFeelingDropdown] = useState(false);
 
   // Reset on open
   useEffect(() => {
@@ -67,6 +71,8 @@ export function PostRitualCapture() {
       setNotes('');
       setIntensity(null);
       setCondition(null);
+      setFeeling(null);
+      setShowFeelingDropdown(false);
     }
   }, [showCapture]);
 
@@ -74,7 +80,7 @@ export function PostRitualCapture() {
 
   const handleSave = () => {
     if (Platform.OS !== ('web' as string)) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    saveFullEntry(notes, intensity, condition);
+    saveFullEntry(notes, intensity, condition, feeling);
   };
 
   const handleSkip = () => {
@@ -144,9 +150,24 @@ export function PostRitualCapture() {
             {pendingData.activeAspects.length > 0 && (
               <View style={s.autoCol}>
                 <Text style={s.autoLabel}>ACTIVE ASPECTS</Text>
-                {pendingData.activeAspects.slice(0, 5).map((asp, i) => (
-                  <Text key={i} style={s.aspectText}>{asp}</Text>
-                ))}
+                {pendingData.activeAspects.slice(0, 5).map((asp, i) => {
+                  const aspectNames: Record<string, string> = {
+                    '☌': 'Conjunction', '⚹': 'Sextile', '□': 'Square',
+                    '△': 'Trine', '☍': 'Opposition',
+                  };
+                  let aspectTypeName = '';
+                  for (const [sym, name] of Object.entries(aspectNames)) {
+                    if (asp.includes(sym)) { aspectTypeName = name; break; }
+                  }
+                  return (
+                    <View key={i} style={s.aspectRow}>
+                      <Text style={s.aspectText}>{asp}</Text>
+                      {aspectTypeName ? (
+                        <Text style={s.aspectTypeName}>{aspectTypeName}</Text>
+                      ) : null}
+                    </View>
+                  );
+                })}
               </View>
             )}
           </View>
@@ -203,6 +224,46 @@ export function PostRitualCapture() {
               </Pressable>
             ))}
           </View>
+
+          {/* Feeling Dropdown */}
+          <Text style={s.inputLabel}>FEELING</Text>
+          <Pressable
+            onPress={() => {
+              setShowFeelingDropdown(!showFeelingDropdown);
+              if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
+            style={({ pressed }) => [
+              s.feelingTrigger,
+              feeling && s.feelingTriggerActive,
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            <Text style={[s.feelingTriggerText, feeling && s.feelingTriggerTextActive]}>
+              {feeling ?? 'Select a sensation...'}
+            </Text>
+            <Text style={s.feelingChevron}>{showFeelingDropdown ? '▲' : '▼'}</Text>
+          </Pressable>
+          {showFeelingDropdown && (
+            <View style={s.feelingDropdown}>
+              {RITUAL_FEELINGS.map((f) => (
+                <Pressable
+                  key={f}
+                  onPress={() => {
+                    setFeeling(f);
+                    setShowFeelingDropdown(false);
+                    if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                  style={({ pressed }) => [
+                    s.feelingOption,
+                    feeling === f && s.feelingOptionActive,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={[s.feelingOptionText, feeling === f && s.feelingOptionTextActive]}>{f}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
 
           {/* Notes */}
           <Text style={s.inputLabel}>NOTES</Text>
@@ -832,6 +893,8 @@ const s = StyleSheet.create({
   autoLabel: { fontFamily: 'JetBrainsMono', fontSize: 9, color: '#6B6B6B', letterSpacing: 2, marginBottom: 4 },
   autoValue: { fontFamily: 'Cinzel', fontSize: 13, color: '#E0E0E0', letterSpacing: 1 },
   aspectText: { fontFamily: 'JetBrainsMono', fontSize: 10, color: '#8A8A8A', marginTop: 2 },
+  aspectRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  aspectTypeName: { fontFamily: 'JetBrainsMono', fontSize: 8, color: '#6B6B6B', fontStyle: 'italic' },
 
   divider: { height: 1, backgroundColor: '#1A1A1A', marginVertical: 16 },
 
@@ -879,4 +942,26 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: '#333', marginBottom: 20,
   },
   skipBtnText: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#6B6B6B', letterSpacing: 1 },
+
+  // ─── Feeling Dropdown ─────────────────────────────────────
+  feelingTrigger: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#0D0D0D', borderRadius: 10, borderWidth: 1, borderColor: '#222',
+    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 4,
+  },
+  feelingTriggerActive: { borderColor: '#D4AF37', backgroundColor: '#D4AF3715' },
+  feelingTriggerText: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#4A4A4A', letterSpacing: 0.5 },
+  feelingTriggerTextActive: { color: '#D4AF37' },
+  feelingChevron: { fontSize: 8, color: '#6B6B6B' },
+  feelingDropdown: {
+    backgroundColor: '#0D0D0D', borderRadius: 10, borderWidth: 1, borderColor: '#222',
+    marginBottom: 12, overflow: 'hidden',
+  },
+  feelingOption: {
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderBottomWidth: 0.5, borderBottomColor: '#1A1A1A',
+  },
+  feelingOptionActive: { backgroundColor: '#D4AF3715' },
+  feelingOptionText: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#8A8A8A', letterSpacing: 0.5 },
+  feelingOptionTextActive: { color: '#D4AF37' },
 });

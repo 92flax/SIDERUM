@@ -142,8 +142,8 @@ export function calculateAstralPotency(
   const rec = HOUR_RECOMMENDATIONS[hourPlanet] ?? HOUR_RECOMMENDATIONS.Sun;
 
   // ===== Composite Potency Score (0-100) =====
-  // Base: 40 + level contribution (up to +20) + synergy bonus (up to +15) + stasis (+10) + event (+15)
-  let rawScore = 40;
+  // Base: 45 + level contribution (up to +20) + synergy bonus (up to +15) + stasis (+10) + event (+15)
+  let rawScore = 45;
   rawScore += Math.round(userLevel * 2); // 0-20 from level
   rawScore += runeSynergy === 'HIGH' ? 15 : runeSynergy === 'MED' ? 8 : 0;
   rawScore += stasisActive ? 10 : 0;
