@@ -25,7 +25,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Line, Path, Rect, G } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import { activateKeepAwake, deactivateKeepAwake } from 'expo-keep-awake';
+import { activateKeepAwake, deactivateKeepAwake, isAvailableAsync } from 'expo-keep-awake';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { useRuneWalletStore, type SavedRune } from '@/lib/store/rune-wallet';
 import { generateBindruneData, ELDER_FUTHARK, type BindruneRenderData } from '@/lib/runes/futhark';
@@ -138,6 +138,7 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
   const [remainingSec, setRemainingSec] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioPlayerRef = useRef<ReturnType<typeof createAudioPlayer> | null>(null);
+  const keepAwakeActiveRef = useRef(false);
 
   // ─── Stores ─────────────────────────────────────────────
   const activeRune = useRuneWalletStore((s) => s.getActiveRune());
@@ -265,10 +266,16 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
     startPulse();
     startAudio();
 
-    // Keep screen awake
-    try {
-      activateKeepAwake('gnosis');
-    } catch {}
+    // Keep screen awake (async, guarded for web)
+    (async () => {
+      try {
+        const available = await isAvailableAsync();
+        if (available) {
+          await activateKeepAwake('gnosis');
+          keepAwakeActiveRef.current = true;
+        }
+      } catch {}
+    })();
 
     // Start timer
     timerRef.current = setInterval(handleTimerTick, 1000);
@@ -287,9 +294,12 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
     stopPulse();
 
     // Release screen lock
-    try {
-      deactivateKeepAwake('gnosis');
-    } catch {}
+    if (keepAwakeActiveRef.current) {
+      try {
+        deactivateKeepAwake('gnosis');
+        keepAwakeActiveRef.current = false;
+      } catch {}
+    }
 
     // Haptic feedback
     if (Platform.OS !== ('web' as string)) {
@@ -343,7 +353,9 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
     }
     stopAudio();
     stopPulse();
-    try { deactivateKeepAwake('gnosis'); } catch {}
+    if (keepAwakeActiveRef.current) {
+      try { deactivateKeepAwake('gnosis'); keepAwakeActiveRef.current = false; } catch {}
+    }
     setMode('setup');
   }, [stopAudio, stopPulse]);
 
@@ -352,7 +364,9 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       stopAudio();
-      try { deactivateKeepAwake('gnosis'); } catch {}
+      if (keepAwakeActiveRef.current) {
+        try { deactivateKeepAwake('gnosis'); keepAwakeActiveRef.current = false; } catch {}
+      }
     };
   }, []);
 

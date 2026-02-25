@@ -583,3 +583,8 @@
 - [x] Auto-trigger AstralRecordModal / PostRitualCapture
 - [x] Pass payload: ritualName "Gnosis State", intent "INVOKE", current astrological weather
 - [x] User can log visions/notes in journal
+
+## Session 13 – Gnosis Wake Lock Fix
+
+- [x] Fix: "The wake lock with tag gnosis has not activated yet" crash on web
+- [x] Guard deactivateKeepAwake with isAvailableAsync, keepAwakeActiveRef tracking, and try-catch
