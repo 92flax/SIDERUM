@@ -654,3 +654,14 @@
 - [x] Fix: Rituals not showing on the Devotion Matrix
 - [x] Ensure journal entries are correctly mapped to heatmap date cells
 - [x] Verify date key format matches between journal store and matrix generation
+
+## Session 17 – Gnosis Bindrune Container Transparency Fix
+
+- [x] Remove opaque background from tranceRuneContainer (force transparent)
+- [x] Remove opaque background from tranceRuneShadow (force transparent)
+- [x] Set overflow: visible on all rune wrapper Views and Animated.Views
+- [x] Add padding (40px) to tranceRuneContainer for glow dissipation space
+- [x] Expand SVG viewBox with 30px padding so bloom layers are not clipped at edges
+- [x] Remove Rect fill from SVG, use transparent style on Svg element
+- [x] Ensure trancePlaceholder also has transparent background
+- [x] Glow fades seamlessly into concentric aura circles without rectangular boundaries

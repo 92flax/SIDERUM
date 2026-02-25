@@ -61,12 +61,21 @@ const STROKE_WIDTH = 5;
 const SPINE_WIDTH = 6;
 
 function BindruneSVG({ data, size, glowColor }: { data: BindruneRenderData; size: number; glowColor: string }) {
+  // Add padding around the viewBox so glow/bloom layers can dissipate without clipping
+  const PAD = 30;
+  const vbW = data.width + PAD * 2;
+  const vbH = data.height + PAD * 2;
   const scale = size / data.width;
-  const h = data.height * scale;
+  const svgW = vbW * scale;
+  const svgH = vbH * scale;
 
   return (
-    <Svg width={size} height={h} viewBox={`0 0 ${data.width} ${data.height}`}>
-      <Rect width={data.width} height={data.height} fill="transparent" />
+    <Svg
+      width={svgW}
+      height={svgH}
+      viewBox={`${-PAD} ${-PAD} ${vbW} ${vbH}`}
+      style={{ backgroundColor: 'transparent', overflow: 'visible' } as any}
+    >
       {/* Outer bloom layer – very diffused */}
       <G opacity={0.15}>
         <Line
@@ -554,7 +563,7 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
           />
 
           {/* Bindrune – glowing in the void */}
-          <Animated.View style={[s.tranceRuneContainer, runeGlowStyle]}>
+          <Animated.View style={[s.tranceRuneContainer, runeGlowStyle, { overflow: 'visible' as const }]}>
             <View style={s.tranceRuneShadow}>
               {bindruneData ? (
                 <BindruneSVG data={bindruneData} size={SW * 0.55} glowColor="#D4AF37" />
@@ -852,10 +861,16 @@ const s = StyleSheet.create({
   tranceRuneContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'transparent',
+    overflow: 'visible',
+    // Extra padding so SVG glow layers can dissipate without clipping
+    padding: 40,
   },
   tranceRuneShadow: {
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'transparent',
+    overflow: 'visible',
     // Native drop shadow for bloom on iOS
     shadowColor: '#D4AF37',
     shadowOffset: { width: 0, height: 0 },
@@ -868,6 +883,7 @@ const s = StyleSheet.create({
     height: SW * 0.7,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'transparent',
   },
   trancePlaceholderText: {
     fontSize: 80,
