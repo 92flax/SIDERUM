@@ -588,3 +588,32 @@
 
 - [x] Fix: "The wake lock with tag gnosis has not activated yet" crash on web
 - [x] Guard deactivateKeepAwake with isAvailableAsync, keepAwakeActiveRef tracking, and try-catch
+
+## Session 14 – Astral Archives (Unified Journal)
+
+### Architecture & Cleanup
+- [x] Remove standalone "Astral Journal" hubView from Sanctum
+- [x] Rename Arsenal hub journal tile to "Astral Archives"
+- [x] Entry point: Arsenal Hub → Astral Archives card
+
+### Astral Archives UI
+- [x] Header: "ASTRAL ARCHIVES" (Cinzel)
+- [x] Sleek top segmented control: [CHRONICLE] and [CHRONOS ENGINE]
+
+### Tab 1: Chronicle (Free Tier)
+- [x] FlatList of all astral_journal entries, sorted by date descending
+- [x] Display Date, Ritual Name, Variant, Intent, Resonance Stars, Notes
+- [x] Basic logbook available to all users, no charts, no filters
+
+### Tab 2: Chronos Engine (Adept / Pro Tier)
+- [x] Pro gate: Frosted Glass / Blur overlay with paywall modal for non-Pro users
+- [x] Filter Terminal: dark JetBrainsMono UI to filter by ritualName, planetaryHour, moonPhase, intent
+- [x] Interactive Devotion Matrix: GitHub-style contribution heatmap
+- [x] Matrix reactive filtering: non-matching days fade to #1A1A1A, matching glow #D4AF37/#3B82F6
+- [x] Matrix tap interaction: tapping a square filters list to that date
+- [x] Query Results FlatList below Matrix with terminal header "> [X] RECORDS FOUND"
+
+### Aesthetics
+- [x] Vantablack (#050505) backgrounds, gold and neon blue accents
+- [x] Custom dark-themed selectors (no native pickers)
+- [x] Strict ÆONIS design guidelines throughout

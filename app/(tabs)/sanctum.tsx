@@ -25,6 +25,7 @@ import { getScriptures, type SanityScripture } from '@/lib/cms/sanity';
 import { ELEMENTS, PLANETS, getSelectionColor, type ElementName, type PlanetName } from '@/lib/ritual/geometry';
 import { useRouter } from 'expo-router';
 import { PostRitualCapture, AstralJournal } from '@/components/astral-journal';
+import { AstralArchives } from '@/components/astral-archives';
 import { useJournalStore } from '@/lib/journal/store';
 import { calculatePlanetaryHours, calculateMoonPhase } from '@/lib/astro/planetary-hours';
 import { getMajorAspects } from '@/lib/astro/aspects';
@@ -32,7 +33,7 @@ import { PLANET_SYMBOLS } from '@/lib/astro/types';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
-type HubView = 'hub' | 'stasis' | 'catalog' | 'library' | 'player' | 'arsenal' | 'journal' | 'gnosis';
+type HubView = 'hub' | 'stasis' | 'catalog' | 'library' | 'player' | 'arsenal' | 'archives' | 'gnosis';
 
 // ─── Sanity Block Content → Markdown Converter ──────────────
 function blockContentToMarkdown(content: SanityScripture['content']): string {
@@ -1079,18 +1080,18 @@ export default function SanctumScreen() {
               <Text style={styles.arsenalCardArrow}>›</Text>
             </Pressable>
 
-            {/* Astral Journal Tile */}
+            {/* Astral Archives Tile */}
             <Pressable
               onPress={() => {
                 if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                setHubView('journal');
+                setHubView('archives');
               }}
               style={({ pressed }) => [styles.arsenalCard, styles.arsenalCardJournal, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
             >
               <Text style={styles.arsenalCardIcon}>☽</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.arsenalCardTitle}>Astral Journal</Text>
-                <Text style={styles.arsenalCardDesc}>Ritual diary · Statistics · Insights</Text>
+                <Text style={styles.arsenalCardTitle}>Astral Archives</Text>
+                <Text style={styles.arsenalCardDesc}>Chronicle · Chronos Engine · Devotion Matrix</Text>
               </View>
               <Text style={styles.arsenalCardArrow}>›</Text>
             </Pressable>
@@ -1101,12 +1102,12 @@ export default function SanctumScreen() {
   }
 
   // ==========================================
-  // ASTRAL JOURNAL VIEW
+  // ASTRAL ARCHIVES VIEW
   // ==========================================
-  if (hubView === 'journal') {
+  if (hubView === 'archives') {
     return (
       <ScreenContainer>
-        <AstralJournal onBack={() => setHubView('arsenal')} />
+        <AstralArchives onBack={() => setHubView('arsenal')} />
         <PostRitualCapture />
       </ScreenContainer>
     );
@@ -1164,7 +1165,7 @@ export default function SanctumScreen() {
           >
             <Text style={styles.tileIcon}>⚔</Text>
             <Text style={styles.tileTitle}>Arsenal</Text>
-            <Text style={styles.tileDesc}>Forge & Journal</Text>
+            <Text style={styles.tileDesc}>Forge & Archives</Text>
             <Text style={styles.tileMeta}>Tools & Records</Text>
           </Pressable>
 
