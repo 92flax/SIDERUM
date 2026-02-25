@@ -665,3 +665,13 @@
 - [x] Remove Rect fill from SVG, use transparent style on Svg element
 - [x] Ensure trancePlaceholder also has transparent background
 - [x] Glow fades seamlessly into concentric aura circles without rectangular boundaries
+
+## Session 18 – Gnosis Bindrune Visibility Fix
+
+- [x] Revert SVG viewBox expansion (caused rune to collapse/disappear)
+- [x] Restore original viewBox dimensions that were working
+- [x] Set explicit width/height on SVG wrapper View (not rely on flex)
+- [x] Use native shadow properties on wrapper View for glow (not SVG padding)
+- [x] Add zIndex: 10 on rune container to ensure visibility above aura rings
+- [x] Verify stroke color #D4AF37 is still explicitly set
+- [x] Rune visible and centered on Gnosis trance screen

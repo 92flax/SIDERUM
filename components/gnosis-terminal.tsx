@@ -61,21 +61,11 @@ const STROKE_WIDTH = 5;
 const SPINE_WIDTH = 6;
 
 function BindruneSVG({ data, size, glowColor }: { data: BindruneRenderData; size: number; glowColor: string }) {
-  // Add padding around the viewBox so glow/bloom layers can dissipate without clipping
-  const PAD = 30;
-  const vbW = data.width + PAD * 2;
-  const vbH = data.height + PAD * 2;
   const scale = size / data.width;
-  const svgW = vbW * scale;
-  const svgH = vbH * scale;
+  const h = data.height * scale;
 
   return (
-    <Svg
-      width={svgW}
-      height={svgH}
-      viewBox={`${-PAD} ${-PAD} ${vbW} ${vbH}`}
-      style={{ backgroundColor: 'transparent', overflow: 'visible' } as any}
-    >
+    <Svg width={size} height={h} viewBox={`0 0 ${data.width} ${data.height}`}>
       {/* Outer bloom layer – very diffused */}
       <G opacity={0.15}>
         <Line
@@ -563,7 +553,7 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
           />
 
           {/* Bindrune – glowing in the void */}
-          <Animated.View style={[s.tranceRuneContainer, runeGlowStyle, { overflow: 'visible' as const }]}>
+          <Animated.View style={[s.tranceRuneContainer, runeGlowStyle]}>
             <View style={s.tranceRuneShadow}>
               {bindruneData ? (
                 <BindruneSVG data={bindruneData} size={SW * 0.55} glowColor="#D4AF37" />
@@ -859,24 +849,23 @@ const s = StyleSheet.create({
   },
 
   tranceRuneContainer: {
+    width: SW * 0.7,
+    height: SW * 0.9,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
-    overflow: 'visible',
-    // Extra padding so SVG glow layers can dissipate without clipping
-    padding: 40,
+    zIndex: 10,
   },
   tranceRuneShadow: {
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
-    overflow: 'visible',
-    // Native drop shadow for bloom on iOS
+    // Native drop shadow creates glow bloom on iOS; on Android elevation handles it
     shadowColor: '#D4AF37',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 30,
-    elevation: 20,
+    shadowOpacity: 0.9,
+    shadowRadius: 35,
+    elevation: 25,
   },
   trancePlaceholder: {
     width: SW * 0.5,
