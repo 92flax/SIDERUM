@@ -617,3 +617,29 @@
 - [x] Vantablack (#050505) backgrounds, gold and neon blue accents
 - [x] Custom dark-themed selectors (no native pickers)
 - [x] Strict ÆONIS design guidelines throughout
+
+## Session 15 – Gnosis Terminal UI Overhaul
+
+### Kill the Circle
+- [x] Remove solid purple background shape (nebulaGlow)
+- [x] Pure black (#050505) background throughout active trance
+
+### Enhance Rune (Glow & Weight)
+- [x] Increase strokeWidth to 4-6 for bindrune lines
+- [x] Glowing Gold (#D4AF37) lines with bloom effect
+- [x] SVG multi-layer glow with increased radii for bloom
+- [x] Rune looks like glowing light in dark void
+
+### Pulsating Aura
+- [x] Soft diffused radial aura behind rune (no hard edges)
+- [x] Reanimated breathing pulse over 5 seconds
+- [x] Dark ethereal gold / deep occult blue (#1E3A8A) fading to black
+- [x] Multiple concentric blur layers for soft radial effect
+
+### Typography & Contrast
+- [x] Frequency label: Ash Grey (#A3A3A3) or Gold, readable
+- [x] JetBrainsMono, all caps, letterSpacing: 2, centered below rune
+
+### Timer & Button Refinement
+- [x] Timer text larger, JetBrainsMono, pure white/light grey
+- [x] END SESSION: ghost button (dark grey border, no solid fill)

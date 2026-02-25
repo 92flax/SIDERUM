@@ -55,10 +55,10 @@ const FREQUENCIES: FrequencyOption[] = [
 // ─── Duration Presets (minutes) ────────────────────────────
 const DURATION_PRESETS = [5, 10, 15, 20, 30, 45, 60];
 
-// ─── Bindrune SVG Renderer ─────────────────────────────────
+// ─── Enhanced Bindrune SVG Renderer (Bloom Glow) ───────────
 const STROKE_COLOR = '#D4AF37';
-const STROKE_WIDTH = 2.5;
-const SPINE_WIDTH = 3.5;
+const STROKE_WIDTH = 5;
+const SPINE_WIDTH = 6;
 
 function BindruneSVG({ data, size, glowColor }: { data: BindruneRenderData; size: number; glowColor: string }) {
   const scale = size / data.width;
@@ -67,37 +67,52 @@ function BindruneSVG({ data, size, glowColor }: { data: BindruneRenderData; size
   return (
     <Svg width={size} height={h} viewBox={`0 0 ${data.width} ${data.height}`}>
       <Rect width={data.width} height={data.height} fill="transparent" />
-      {/* Glow layer */}
-      <G opacity={0.35}>
+      {/* Outer bloom layer – very diffused */}
+      <G opacity={0.15}>
         <Line
           x1={data.cx} y1={data.staveTop} x2={data.cx} y2={data.staveBottom}
-          stroke={glowColor} strokeWidth={SPINE_WIDTH + 8} strokeLinecap="square"
+          stroke={glowColor} strokeWidth={SPINE_WIDTH + 18} strokeLinecap="round"
+        />
+        {data.lines.map((l) => (
+          <Line key={`b1-${l.key}`} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
+            stroke={glowColor} strokeWidth={STROKE_WIDTH + 16} strokeLinecap="round" />
+        ))}
+        {data.paths.map((p) => (
+          <Path key={`b1-${p.key}`} d={p.d} stroke={glowColor} strokeWidth={STROKE_WIDTH + 16}
+            fill="none" strokeLinecap="round" />
+        ))}
+      </G>
+      {/* Mid bloom layer */}
+      <G opacity={0.25}>
+        <Line
+          x1={data.cx} y1={data.staveTop} x2={data.cx} y2={data.staveBottom}
+          stroke={glowColor} strokeWidth={SPINE_WIDTH + 12} strokeLinecap="round"
+        />
+        {data.lines.map((l) => (
+          <Line key={`b2-${l.key}`} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
+            stroke={glowColor} strokeWidth={STROKE_WIDTH + 10} strokeLinecap="round" />
+        ))}
+        {data.paths.map((p) => (
+          <Path key={`b2-${p.key}`} d={p.d} stroke={glowColor} strokeWidth={STROKE_WIDTH + 10}
+            fill="none" strokeLinecap="round" />
+        ))}
+      </G>
+      {/* Inner glow layer */}
+      <G opacity={0.5}>
+        <Line
+          x1={data.cx} y1={data.staveTop} x2={data.cx} y2={data.staveBottom}
+          stroke={glowColor} strokeWidth={SPINE_WIDTH + 5} strokeLinecap="round"
         />
         {data.lines.map((l) => (
           <Line key={`g-${l.key}`} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
-            stroke={glowColor} strokeWidth={STROKE_WIDTH + 6} strokeLinecap="round" />
+            stroke={glowColor} strokeWidth={STROKE_WIDTH + 4} strokeLinecap="round" />
         ))}
         {data.paths.map((p) => (
-          <Path key={`g-${p.key}`} d={p.d} stroke={glowColor} strokeWidth={STROKE_WIDTH + 6}
+          <Path key={`g-${p.key}`} d={p.d} stroke={glowColor} strokeWidth={STROKE_WIDTH + 4}
             fill="none" strokeLinecap="round" />
         ))}
       </G>
-      {/* Mid glow */}
-      <G opacity={0.6}>
-        <Line
-          x1={data.cx} y1={data.staveTop} x2={data.cx} y2={data.staveBottom}
-          stroke={glowColor} strokeWidth={SPINE_WIDTH + 3} strokeLinecap="square"
-        />
-        {data.lines.map((l) => (
-          <Line key={`m-${l.key}`} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
-            stroke={glowColor} strokeWidth={STROKE_WIDTH + 3} strokeLinecap="round" />
-        ))}
-        {data.paths.map((p) => (
-          <Path key={`m-${p.key}`} d={p.d} stroke={glowColor} strokeWidth={STROKE_WIDTH + 3}
-            fill="none" strokeLinecap="round" />
-        ))}
-      </G>
-      {/* Crisp layer */}
+      {/* Crisp core layer – the actual rune */}
       <Line
         x1={data.cx} y1={data.staveTop} x2={data.cx} y2={data.staveBottom}
         stroke={STROKE_COLOR} strokeWidth={SPINE_WIDTH} strokeLinecap="square"
@@ -110,15 +125,15 @@ function BindruneSVG({ data, size, glowColor }: { data: BindruneRenderData; size
         <Path key={p.key} d={p.d} stroke={STROKE_COLOR} strokeWidth={STROKE_WIDTH}
           fill="none" strokeLinecap="round" />
       ))}
-      {/* Core highlight */}
-      <G opacity={0.5}>
+      {/* Hot white core highlight */}
+      <G opacity={0.4}>
         <Line
           x1={data.cx} y1={data.staveTop} x2={data.cx} y2={data.staveBottom}
-          stroke="#FFFFFF" strokeWidth={1.5} strokeLinecap="round"
+          stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round"
         />
         {data.lines.map((l) => (
           <Line key={`c-${l.key}`} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
-            stroke="#FFFFFF" strokeWidth={1} strokeLinecap="round" />
+            stroke="#FFFFFF" strokeWidth={1.5} strokeLinecap="round" />
         ))}
       </G>
     </Svg>
@@ -164,28 +179,53 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
     return generateBindruneData(runes, 200, 280);
   }, [activeRune]);
 
-  // ─── Reanimated pulsing (4s in, 4s out) ─────────────────
-  const pulseScale = useSharedValue(1);
-  const pulseOpacity = useSharedValue(0.8);
+  // ─── Reanimated pulsing aura (2.5s in, 2.5s out = 5s cycle) ──
+  const auraScale = useSharedValue(1);
+  const auraOpacity = useSharedValue(0.12);
+  const runeGlowOpacity = useSharedValue(0.8);
 
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-    opacity: pulseOpacity.value,
+  const auraStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: auraScale.value }],
+    opacity: auraOpacity.value,
+  }));
+
+  const auraStyle2 = useAnimatedStyle(() => ({
+    transform: [{ scale: auraScale.value * 0.75 }],
+    opacity: auraOpacity.value * 1.5,
+  }));
+
+  const auraStyle3 = useAnimatedStyle(() => ({
+    transform: [{ scale: auraScale.value * 0.5 }],
+    opacity: auraOpacity.value * 2.2,
+  }));
+
+  const runeGlowStyle = useAnimatedStyle(() => ({
+    opacity: runeGlowOpacity.value,
   }));
 
   const startPulse = useCallback(() => {
-    pulseScale.value = withRepeat(
+    // Aura breathing: 5-second cycle
+    auraScale.value = withRepeat(
       withSequence(
-        withTiming(1.06, { duration: 4000, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1.0, { duration: 4000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1.15, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1.0, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
       false,
     );
-    pulseOpacity.value = withRepeat(
+    auraOpacity.value = withRepeat(
       withSequence(
-        withTiming(1.0, { duration: 4000, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.7, { duration: 4000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.2, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.08, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+    // Rune glow subtle pulse
+    runeGlowOpacity.value = withRepeat(
+      withSequence(
+        withTiming(1.0, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.75, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
       false,
@@ -193,10 +233,12 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
   }, []);
 
   const stopPulse = useCallback(() => {
-    cancelAnimation(pulseScale);
-    cancelAnimation(pulseOpacity);
-    pulseScale.value = withTiming(1, { duration: 300 });
-    pulseOpacity.value = withTiming(1, { duration: 300 });
+    cancelAnimation(auraScale);
+    cancelAnimation(auraOpacity);
+    cancelAnimation(runeGlowOpacity);
+    auraScale.value = withTiming(1, { duration: 300 });
+    auraOpacity.value = withTiming(0, { duration: 300 });
+    runeGlowOpacity.value = withTiming(1, { duration: 300 });
   }, []);
 
   // ─── Timer ──────────────────────────────────────────────
@@ -228,9 +270,6 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
       if (Platform.OS !== 'web') {
         await setAudioModeAsync({ playsInSilentMode: true });
       }
-      // Use a placeholder URL – in production, replace with actual frequency audio files
-      // For now, we create a silent player that represents the frequency
-      // The actual audio files would be hosted and referenced here
       const audioUrl = getFrequencyAudioUrl(selectedFreq.id);
       if (audioUrl) {
         const player = createAudioPlayer({ uri: audioUrl });
@@ -308,8 +347,7 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
 
     // Prepare journal data
     const now = new Date();
-    // Use a default location for planetary hour calculation
-    const defaultLoc = { latitude: 51.5074, longitude: -0.1278 }; // London fallback
+    const defaultLoc = { latitude: 51.5074, longitude: -0.1278 };
     let dayRuler = 'Unknown';
     let hourRuler = 'Unknown';
     try {
@@ -371,11 +409,7 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
   }, []);
 
   // ─── Frequency audio URL helper ─────────────────────────
-  // Placeholder: In production, host actual binaural beat files
-  // and return their URLs here based on frequency ID
   function getFrequencyAudioUrl(freqId: string): string | null {
-    // These would be real hosted audio URLs in production
-    // For now, return null to gracefully skip audio
     return null;
   }
 
@@ -392,7 +426,7 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
               <Text style={s.backText}>← Back</Text>
             </Pressable>
             <Text style={s.title}>GNOSIS</Text>
-            <Text style={s.subtitle}>Psychoacoustic Frequency Meditation</Text>
+            <Text style={s.subtitle}>PSYCHOACOUSTIC FREQUENCY MEDITATION</Text>
           </View>
 
           {/* Active Bindrune Display */}
@@ -400,8 +434,8 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
             <Text style={s.sectionLabel}>ACTIVE BINDRUNE</Text>
             {bindruneData && activeRune ? (
               <View style={s.runePreview}>
-                <View style={[s.runeGlow, { shadowColor: selectedFreq.color }]}>
-                  <BindruneSVG data={bindruneData} size={160} glowColor={selectedFreq.color} />
+                <View style={s.runeGlow}>
+                  <BindruneSVG data={bindruneData} size={160} glowColor="#D4AF37" />
                 </View>
                 <Text style={s.runeName}>{activeRune.name}</Text>
                 <Text style={s.runeRunes}>{activeRune.runeNames.join(' · ')}</Text>
@@ -488,45 +522,66 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
   // RENDER: ACTIVE TRANCE MODE
   // ═══════════════════════════════════════════════════════════
   if (mode === 'active') {
+    // Determine aura color based on frequency
+    const auraColor = selectedFreq.id === 'solar' ? '#D4AF37' : selectedFreq.id === 'mars' ? '#EF4444' : '#1E3A8A';
+
     return (
       <View style={s.container}>
         <View style={s.tranceContainer}>
-          {/* Nebula Glow Background */}
+          {/* Soft radial aura – outermost ring (very diffused) */}
           <Animated.View
             style={[
-              s.nebulaGlow,
-              { backgroundColor: selectedFreq.color },
-              pulseStyle,
+              s.auraRing1,
+              { backgroundColor: auraColor },
+              auraStyle,
+            ]}
+          />
+          {/* Mid aura ring */}
+          <Animated.View
+            style={[
+              s.auraRing2,
+              { backgroundColor: auraColor },
+              auraStyle2,
+            ]}
+          />
+          {/* Inner aura ring */}
+          <Animated.View
+            style={[
+              s.auraRing3,
+              { backgroundColor: auraColor },
+              auraStyle3,
             ]}
           />
 
-          {/* Pulsing Bindrune */}
-          <Animated.View style={[s.tranceRuneContainer, pulseStyle]}>
-            {bindruneData ? (
-              <BindruneSVG data={bindruneData} size={SW * 0.55} glowColor={selectedFreq.color} />
-            ) : (
-              <View style={s.trancePlaceholder}>
-                <Text style={[s.trancePlaceholderText, { color: selectedFreq.color }]}>✦</Text>
-              </View>
-            )}
+          {/* Bindrune – glowing in the void */}
+          <Animated.View style={[s.tranceRuneContainer, runeGlowStyle]}>
+            <View style={s.tranceRuneShadow}>
+              {bindruneData ? (
+                <BindruneSVG data={bindruneData} size={SW * 0.55} glowColor="#D4AF37" />
+              ) : (
+                <View style={s.trancePlaceholder}>
+                  <Text style={s.trancePlaceholderText}>✦</Text>
+                </View>
+              )}
+            </View>
           </Animated.View>
 
-          {/* Frequency Label */}
-          <Text style={[s.tranceFreqLabel, { color: selectedFreq.color + '99' }]}>
-            {selectedFreq.name} · {selectedFreq.frequency}
+          {/* Frequency Label – readable, elegant */}
+          <Text style={s.tranceFreqLabel}>
+            {selectedFreq.name.toUpperCase()} · {selectedFreq.frequency}
           </Text>
 
-          {/* Timer */}
+          {/* Timer – large, prominent */}
           <View style={s.timerContainer}>
             <Text style={s.timerText}>{formatTime(remainingSec)}</Text>
           </View>
 
-          {/* Exit Button */}
+          {/* Exit Button – ghost style */}
           <Pressable
             onPress={() => {
               handleExit();
             }}
-            style={({ pressed }) => [s.exitBtn, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [s.exitBtn, pressed && { opacity: 0.4 }]}
           >
             <Text style={s.exitBtnText}>END SESSION</Text>
           </Pressable>
@@ -566,6 +621,8 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
 // ═══════════════════════════════════════════════════════════
 // STYLES
 // ═══════════════════════════════════════════════════════════
+const AURA_SIZE = SW * 1.2;
+
 const s = StyleSheet.create({
   container: {
     flex: 1,
@@ -602,11 +659,12 @@ const s = StyleSheet.create({
   },
   subtitle: {
     fontFamily: 'JetBrainsMono',
-    fontSize: 11,
-    color: '#555',
-    letterSpacing: 1,
+    fontSize: 10,
+    color: '#A3A3A3',
+    letterSpacing: 2,
     marginTop: 6,
     textAlign: 'center',
+    textTransform: 'uppercase',
   },
 
   // ─── Section Labels ───────────────────────────────────
@@ -628,10 +686,11 @@ const s = StyleSheet.create({
   },
   runeGlow: {
     alignItems: 'center',
+    shadowColor: '#D4AF37',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 30,
-    elevation: 10,
+    shadowOpacity: 0.8,
+    shadowRadius: 25,
+    elevation: 15,
   },
   runeName: {
     fontFamily: 'Cinzel',
@@ -767,17 +826,42 @@ const s = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#050505',
   },
-  nebulaGlow: {
+
+  // Soft radial aura layers – concentric, no hard edges
+  auraRing1: {
     position: 'absolute',
-    width: SW * 0.8,
-    height: SW * 0.8,
-    borderRadius: SW * 0.4,
-    opacity: 0.08,
+    width: AURA_SIZE,
+    height: AURA_SIZE,
+    borderRadius: AURA_SIZE / 2,
   },
+  auraRing2: {
+    position: 'absolute',
+    width: AURA_SIZE * 0.7,
+    height: AURA_SIZE * 0.7,
+    borderRadius: (AURA_SIZE * 0.7) / 2,
+  },
+  auraRing3: {
+    position: 'absolute',
+    width: AURA_SIZE * 0.45,
+    height: AURA_SIZE * 0.45,
+    borderRadius: (AURA_SIZE * 0.45) / 2,
+  },
+
   tranceRuneContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  tranceRuneShadow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Native drop shadow for bloom on iOS
+    shadowColor: '#D4AF37',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 30,
+    elevation: 20,
   },
   trancePlaceholder: {
     width: SW * 0.5,
@@ -787,39 +871,50 @@ const s = StyleSheet.create({
   },
   trancePlaceholderText: {
     fontSize: 80,
+    color: '#D4AF37',
   },
+
+  // Frequency label – JetBrainsMono, all caps, centered
   tranceFreqLabel: {
     fontFamily: 'JetBrainsMono',
-    fontSize: 11,
+    fontSize: 12,
+    color: '#A3A3A3',
     letterSpacing: 2,
-    marginTop: 30,
+    marginTop: 32,
+    textAlign: 'center',
+    textTransform: 'uppercase',
   },
+
+  // Timer – large, prominent
   timerContainer: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 110,
     alignItems: 'center',
   },
   timerText: {
     fontFamily: 'JetBrainsMono',
-    fontSize: 32,
-    color: '#FFFFFF',
-    letterSpacing: 4,
-    opacity: 0.6,
+    fontSize: 42,
+    color: '#E0E0E0',
+    letterSpacing: 6,
   },
+
+  // Exit button – ghost style (no fill, dark border)
   exitBtn: {
     position: 'absolute',
-    bottom: 50,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
+    bottom: 52,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
     borderWidth: 1,
     borderColor: '#333',
     borderRadius: 8,
+    backgroundColor: 'transparent',
   },
   exitBtnText: {
     fontFamily: 'JetBrainsMono',
     fontSize: 11,
-    color: '#555',
+    color: '#666',
     letterSpacing: 2,
+    textTransform: 'uppercase',
   },
 
   // ─── Completion ───────────────────────────────────────
