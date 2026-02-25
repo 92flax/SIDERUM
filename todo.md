@@ -529,3 +529,16 @@
 - [x] Both circles scale together: smaller on exhale, larger on inhale
 - [x] Must not overlap control or information elements
 - [x] Phase timing fill animation continues as before
+
+## Session 8 Fixes
+
+### Revert Stasis Circle
+- [x] Revert Stasis circle changes from Session 7 (back to previous ring structure)
+
+### Header Layout Fix
+- [x] Mage name + level displayed in same size and color as ÆONIS
+- [x] Position: directly between ÆONIS and XP display (same row/line)
+
+### Astral Journal – Editable Auto-Fields
+- [x] All auto-filled fields (ritual name, intent, dynamic selection, planetary day, planetary hour, moon phase, aspects, XP) must be editable/typeable by user
+- [x] User can override auto-captured data if needed

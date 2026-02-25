@@ -26,17 +26,11 @@ import { useRitualStore } from '@/lib/ritual/store';
 const { width: SW } = Dimensions.get('window');
 
 // ─── SVG Ring Dimensions ────────────────────────────────────
-// The inner breathing circle (white ring) + outer phase progress ring
-const CIRCLE_SIZE = Math.min(SW * 0.52, 200); // inner breathing circle
-const RING_GAP = 12; // gap between inner circle and outer progress ring
-const RING_SIZE = CIRCLE_SIZE + RING_GAP * 2 + 10; // total SVG canvas
+const RING_SIZE = Math.min(SW * 0.55, 220);
 const RING_CENTER = RING_SIZE / 2;
 const RING_STROKE = 2.5;
-// Inner breathing circle radius
-const INNER_RADIUS = CIRCLE_SIZE / 2;
-// Outer progress ring radius (wraps around the inner circle)
-const OUTER_RADIUS = INNER_RADIUS + RING_GAP;
-const RING_CIRCUMFERENCE = 2 * Math.PI * OUTER_RADIUS;
+const RING_RADIUS = RING_SIZE / 2 - RING_STROKE * 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -564,12 +558,12 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
       </View>
       <Text style={s.cycleLabel}>{cycleCount} cycles · {rhythm.name}</Text>
 
-      {/* ── Breathing Circle + Outer Progress Ring ─────────── */}
+      {/* ── Breathing Circle + SVG Ring ─────────────────────── */}
       <View style={s.ringArea}>
         {/* Nebula glow (does not scale) */}
         <Animated.View style={[s.nebulaGlow, { backgroundColor: glowColor }, nebulaGlowStyle]} />
 
-        {/* Everything scales together: inner circle + outer progress ring */}
+        {/* Scaled container: SVG ring + phase text */}
         <Animated.View style={breathCircleStyle}>
           <Svg width={RING_SIZE} height={RING_SIZE}>
             <Defs>
@@ -579,32 +573,21 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
               </LinearGradient>
             </Defs>
 
-            {/* Inner breathing circle (thin white ring) */}
+            {/* Track ring */}
             <Circle
               cx={RING_CENTER}
               cy={RING_CENTER}
-              r={INNER_RADIUS}
-              stroke="#FFFFFF"
-              strokeWidth={1.5}
-              fill="none"
-              opacity={0.3}
-            />
-
-            {/* Outer progress ring track */}
-            <Circle
-              cx={RING_CENTER}
-              cy={RING_CENTER}
-              r={OUTER_RADIUS}
+              r={RING_RADIUS}
               stroke="#1A1A1A"
               strokeWidth={RING_STROKE}
               fill="none"
             />
 
-            {/* Outer progress ring (fluid fill per phase) */}
+            {/* Progress ring (fluid fill per phase) */}
             <AnimatedCircle
               cx={RING_CENTER}
               cy={RING_CENTER}
-              r={OUTER_RADIUS}
+              r={RING_RADIUS}
               stroke="url(#phaseGrad)"
               strokeWidth={RING_STROKE}
               fill="none"
@@ -615,7 +598,7 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
             />
           </Svg>
 
-          {/* Phase text centered inside the inner circle */}
+          {/* Phase text centered */}
           <View style={s.centerText}>
             <Animated.Text style={[s.phaseText, { color: glowColor }, phaseTextStyle]}>
               {currentPhase}
@@ -902,8 +885,8 @@ const s = StyleSheet.create({
 
   // ── Ring Area ─────────────────────────────────────────────
   ringArea: {
-    width: RING_SIZE + 40,
-    height: RING_SIZE + 40,
+    width: RING_SIZE + 50,
+    height: RING_SIZE + 50,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 24,
@@ -911,9 +894,9 @@ const s = StyleSheet.create({
   },
   nebulaGlow: {
     position: 'absolute',
-    width: RING_SIZE + 20,
-    height: RING_SIZE + 20,
-    borderRadius: (RING_SIZE + 20) / 2,
+    width: RING_SIZE + 30,
+    height: RING_SIZE + 30,
+    borderRadius: (RING_SIZE + 30) / 2,
   },
   centerText: {
     position: 'absolute',

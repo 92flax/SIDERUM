@@ -15,6 +15,7 @@ import {
   type ExperienceIntensity,
   type DailyCondition,
   type RitualFeeling,
+  type PendingJournalData,
   RITUAL_FEELINGS,
 } from '@/lib/journal/store';
 import { calculatePlanetaryHours, calculateMoonPhase } from '@/lib/astro/planetary-hours';
@@ -51,7 +52,12 @@ const PLANET_SYMBOL_MAP: Record<string, string> = {
 
 // ============================================================
 // POST-RITUAL CAPTURE MODAL
+// All auto-filled fields are editable by the user.
 // ============================================================
+
+const PLANETS = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'];
+const INTENTS: Array<'BANISH' | 'INVOKE'> = ['BANISH', 'INVOKE'];
+
 export function PostRitualCapture() {
   const pendingData = useJournalStore((s) => s.pendingData);
   const showCapture = useJournalStore((s) => s.showPostRitualCapture);
@@ -59,33 +65,73 @@ export function PostRitualCapture() {
   const saveAutoEntry = useJournalStore((s) => s.saveAutoEntry);
   const closeCapture = useJournalStore((s) => s.closePostRitualCapture);
 
+  // User-input fields
   const [notes, setNotes] = useState('');
   const [intensity, setIntensity] = useState<ExperienceIntensity | null>(null);
   const [condition, setCondition] = useState<DailyCondition | null>(null);
   const [feeling, setFeeling] = useState<RitualFeeling | null>(null);
   const [showFeelingDropdown, setShowFeelingDropdown] = useState(false);
 
-  // Reset on open
+  // Editable auto-captured fields (initialized from pendingData)
+  const [editRitualName, setEditRitualName] = useState('');
+  const [editIntent, setEditIntent] = useState<'BANISH' | 'INVOKE'>('BANISH');
+  const [editSelection, setEditSelection] = useState('');
+  const [editRulerDay, setEditRulerDay] = useState('');
+  const [editRulerHour, setEditRulerHour] = useState('');
+  const [editMoonPhase, setEditMoonPhase] = useState('');
+  const [editXp, setEditXp] = useState('0');
+  const [editAspects, setEditAspects] = useState('');
+  const [showDayPicker, setShowDayPicker] = useState(false);
+  const [showHourPicker, setShowHourPicker] = useState(false);
+  const [showIntentPicker, setShowIntentPicker] = useState(false);
+
+  // Reset / initialize on open
   useEffect(() => {
-    if (showCapture) {
+    if (showCapture && pendingData) {
       setNotes('');
       setIntensity(null);
       setCondition(null);
       setFeeling(null);
       setShowFeelingDropdown(false);
+      setEditRitualName(pendingData.ritualName);
+      setEditIntent(pendingData.intent);
+      setEditSelection(pendingData.dynamicSelection ?? '');
+      setEditRulerDay(pendingData.rulerOfDay);
+      setEditRulerHour(pendingData.rulerOfHour);
+      setEditMoonPhase(pendingData.moonPhase);
+      setEditXp(String(pendingData.xpAwarded));
+      setEditAspects(pendingData.activeAspects.join(', '));
+      setShowDayPicker(false);
+      setShowHourPicker(false);
+      setShowIntentPicker(false);
     }
-  }, [showCapture]);
+  }, [showCapture, pendingData]);
 
   if (!showCapture || !pendingData) return null;
 
   const handleSave = () => {
     if (Platform.OS !== ('web' as string)) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    saveFullEntry(notes, intensity, condition, feeling);
+    const overrides: Partial<PendingJournalData> = {
+      ritualName: editRitualName || pendingData.ritualName,
+      intent: editIntent,
+      dynamicSelection: editSelection || pendingData.dynamicSelection,
+      rulerOfDay: editRulerDay || pendingData.rulerOfDay,
+      rulerOfHour: editRulerHour || pendingData.rulerOfHour,
+      moonPhase: editMoonPhase || pendingData.moonPhase,
+      xpAwarded: parseInt(editXp, 10) || pendingData.xpAwarded,
+      activeAspects: editAspects.trim() ? editAspects.split(',').map(a => a.trim()).filter(Boolean) : pendingData.activeAspects,
+    };
+    saveFullEntry(notes, intensity, condition, feeling, overrides);
   };
 
   const handleSkip = () => {
     if (Platform.OS !== ('web' as string)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     saveAutoEntry();
+  };
+
+  const aspectNames: Record<string, string> = {
+    '\u260c': 'Conjunction', '\u26b9': 'Sextile', '\u25a1': 'Square',
+    '\u25b3': 'Trine', '\u260d': 'Opposition',
   };
 
   return (
@@ -94,52 +140,133 @@ export function PostRitualCapture() {
         <ScrollView contentContainerStyle={s.captureScroll} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <Text style={s.captureTitle}>Astral Journal</Text>
-          <Text style={s.captureSubtitle}>Record your experience</Text>
+          <Text style={s.captureSubtitle}>Record your experience · tap any field to edit</Text>
 
-          {/* Auto-captured data (read-only) */}
+          {/* ─── Editable Auto-Captured Data ─────────────────── */}
           <View style={s.autoSection}>
             <Text style={s.autoLabel}>RITUAL</Text>
-            <Text style={s.autoValue}>{pendingData.ritualName}</Text>
+            <TextInput
+              style={s.editableField}
+              value={editRitualName}
+              onChangeText={setEditRitualName}
+              placeholderTextColor="#4A4A4A"
+            />
 
             <View style={s.autoRow}>
               <View style={s.autoCol}>
                 <Text style={s.autoLabel}>INTENT</Text>
-                <Text style={[s.autoValue, { color: pendingData.intent === 'BANISH' ? '#00CCCC' : '#D4AF37' }]}>
-                  {pendingData.intent === 'BANISH' ? '↑ Banish' : '↓ Invoke'}
-                </Text>
+                <Pressable
+                  onPress={() => setShowIntentPicker(!showIntentPicker)}
+                  style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={[s.editableFieldText, { color: editIntent === 'BANISH' ? '#00CCCC' : '#D4AF37' }]}>
+                    {editIntent === 'BANISH' ? '\u2191 Banish' : '\u2193 Invoke'} \u25BE
+                  </Text>
+                </Pressable>
+                {showIntentPicker && (
+                  <View style={s.miniPicker}>
+                    {INTENTS.map((it) => (
+                      <Pressable
+                        key={it}
+                        onPress={() => { setEditIntent(it); setShowIntentPicker(false); }}
+                        style={({ pressed }) => [s.miniPickerItem, editIntent === it && s.miniPickerItemActive, pressed && { opacity: 0.7 }]}
+                      >
+                        <Text style={[s.miniPickerText, editIntent === it && s.miniPickerTextActive]}>
+                          {it === 'BANISH' ? '\u2191 Banish' : '\u2193 Invoke'}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
               </View>
               <View style={s.autoCol}>
                 <Text style={s.autoLabel}>XP</Text>
-                <Text style={[s.autoValue, { color: '#D4AF37' }]}>+{pendingData.xpAwarded}</Text>
+                <TextInput
+                  style={[s.editableField, { color: '#D4AF37' }]}
+                  value={editXp}
+                  onChangeText={setEditXp}
+                  keyboardType="numeric"
+                  placeholderTextColor="#4A4A4A"
+                />
               </View>
             </View>
 
-            {pendingData.dynamicSelection && (
+            {(editSelection || pendingData.dynamicSelection) ? (
               <View style={s.autoCol}>
                 <Text style={s.autoLabel}>SELECTION</Text>
-                <Text style={s.autoValue}>{pendingData.dynamicSelection}</Text>
+                <TextInput
+                  style={s.editableField}
+                  value={editSelection}
+                  onChangeText={setEditSelection}
+                  placeholderTextColor="#4A4A4A"
+                />
               </View>
-            )}
+            ) : null}
 
             <View style={s.autoRow}>
               <View style={s.autoCol}>
                 <Text style={s.autoLabel}>DAY OF</Text>
-                <Text style={s.autoValue}>
-                  {PLANET_SYMBOL_MAP[pendingData.rulerOfDay] ?? ''} {pendingData.rulerOfDay}
-                </Text>
+                <Pressable
+                  onPress={() => setShowDayPicker(!showDayPicker)}
+                  style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={s.editableFieldText}>
+                    {PLANET_SYMBOL_MAP[editRulerDay] ?? ''} {editRulerDay} \u25BE
+                  </Text>
+                </Pressable>
+                {showDayPicker && (
+                  <View style={s.miniPicker}>
+                    {PLANETS.map((p) => (
+                      <Pressable
+                        key={p}
+                        onPress={() => { setEditRulerDay(p); setShowDayPicker(false); }}
+                        style={({ pressed }) => [s.miniPickerItem, editRulerDay === p && s.miniPickerItemActive, pressed && { opacity: 0.7 }]}
+                      >
+                        <Text style={[s.miniPickerText, editRulerDay === p && s.miniPickerTextActive]}>
+                          {PLANET_SYMBOL_MAP[p] ?? ''} {p}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
               </View>
               <View style={s.autoCol}>
                 <Text style={s.autoLabel}>HOUR OF</Text>
-                <Text style={s.autoValue}>
-                  {PLANET_SYMBOL_MAP[pendingData.rulerOfHour] ?? ''} {pendingData.rulerOfHour}
-                </Text>
+                <Pressable
+                  onPress={() => setShowHourPicker(!showHourPicker)}
+                  style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={s.editableFieldText}>
+                    {PLANET_SYMBOL_MAP[editRulerHour] ?? ''} {editRulerHour} \u25BE
+                  </Text>
+                </Pressable>
+                {showHourPicker && (
+                  <View style={s.miniPicker}>
+                    {PLANETS.map((p) => (
+                      <Pressable
+                        key={p}
+                        onPress={() => { setEditRulerHour(p); setShowHourPicker(false); }}
+                        style={({ pressed }) => [s.miniPickerItem, editRulerHour === p && s.miniPickerItemActive, pressed && { opacity: 0.7 }]}
+                      >
+                        <Text style={[s.miniPickerText, editRulerHour === p && s.miniPickerTextActive]}>
+                          {PLANET_SYMBOL_MAP[p] ?? ''} {p}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
               </View>
             </View>
 
             <View style={s.autoRow}>
               <View style={s.autoCol}>
-                <Text style={s.autoLabel}>MOON</Text>
-                <Text style={s.autoValue}>{pendingData.moonPhase}</Text>
+                <Text style={s.autoLabel}>MOON PHASE</Text>
+                <TextInput
+                  style={s.editableField}
+                  value={editMoonPhase}
+                  onChangeText={setEditMoonPhase}
+                  placeholderTextColor="#4A4A4A"
+                />
               </View>
               <View style={s.autoCol}>
                 <Text style={s.autoLabel}>STEPS</Text>
@@ -147,29 +274,34 @@ export function PostRitualCapture() {
               </View>
             </View>
 
-            {pendingData.activeAspects.length > 0 && (
-              <View style={s.autoCol}>
-                <Text style={s.autoLabel}>ACTIVE ASPECTS</Text>
-                {pendingData.activeAspects.slice(0, 5).map((asp, i) => {
-                  const aspectNames: Record<string, string> = {
-                    '☌': 'Conjunction', '⚹': 'Sextile', '□': 'Square',
-                    '△': 'Trine', '☍': 'Opposition',
-                  };
-                  let aspectTypeName = '';
-                  for (const [sym, name] of Object.entries(aspectNames)) {
-                    if (asp.includes(sym)) { aspectTypeName = name; break; }
-                  }
-                  return (
-                    <View key={i} style={s.aspectRow}>
-                      <Text style={s.aspectText}>{asp}</Text>
-                      {aspectTypeName ? (
-                        <Text style={s.aspectTypeName}>{aspectTypeName}</Text>
-                      ) : null}
-                    </View>
-                  );
-                })}
-              </View>
-            )}
+            {/* Aspects (editable as comma-separated text) */}
+            <View style={[s.autoCol, { marginTop: 8 }]}>
+              <Text style={s.autoLabel}>ACTIVE ASPECTS</Text>
+              {pendingData.activeAspects.length > 0 ? (
+                <View style={{ marginBottom: 6 }}>
+                  {pendingData.activeAspects.slice(0, 5).map((asp, i) => {
+                    let typeName = '';
+                    for (const [sym, name] of Object.entries(aspectNames)) {
+                      if (asp.includes(sym)) { typeName = name; break; }
+                    }
+                    return (
+                      <View key={i} style={s.aspectRow}>
+                        <Text style={s.aspectText}>{asp}</Text>
+                        {typeName ? <Text style={s.aspectTypeName}>{typeName}</Text> : null}
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
+              <TextInput
+                style={[s.editableField, { fontSize: 10 }]}
+                value={editAspects}
+                onChangeText={setEditAspects}
+                placeholder="Edit aspects (comma-separated)..."
+                placeholderTextColor="#4A4A4A"
+                multiline
+              />
+            </View>
           </View>
 
           {/* Divider */}
@@ -241,7 +373,7 @@ export function PostRitualCapture() {
             <Text style={[s.feelingTriggerText, feeling && s.feelingTriggerTextActive]}>
               {feeling ?? 'Select a sensation...'}
             </Text>
-            <Text style={s.feelingChevron}>{showFeelingDropdown ? '▲' : '▼'}</Text>
+            <Text style={s.feelingChevron}>{showFeelingDropdown ? '\u25b2' : '\u25bc'}</Text>
           </Pressable>
           {showFeelingDropdown && (
             <View style={s.feelingDropdown}>
@@ -964,4 +1096,28 @@ const s = StyleSheet.create({
   feelingOptionActive: { backgroundColor: '#D4AF3715' },
   feelingOptionText: { fontFamily: 'JetBrainsMono', fontSize: 12, color: '#8A8A8A', letterSpacing: 0.5 },
   feelingOptionTextActive: { color: '#D4AF37' },
+
+  // ─── Editable Fields ──────────────────────────────────────
+  editableField: {
+    fontFamily: 'Cinzel', fontSize: 13, color: '#E0E0E0', letterSpacing: 1,
+    borderBottomWidth: 1, borderBottomColor: '#333', paddingVertical: 4,
+    paddingHorizontal: 0, backgroundColor: 'transparent',
+  },
+  editableFieldText: {
+    fontFamily: 'Cinzel', fontSize: 13, color: '#E0E0E0', letterSpacing: 1,
+    paddingVertical: 4,
+  },
+
+  // ─── Mini Picker (for Day/Hour/Intent) ────────────────────
+  miniPicker: {
+    backgroundColor: '#0D0D0D', borderRadius: 8, borderWidth: 1, borderColor: '#222',
+    marginTop: 4, overflow: 'hidden',
+  },
+  miniPickerItem: {
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderBottomWidth: 0.5, borderBottomColor: '#1A1A1A',
+  },
+  miniPickerItemActive: { backgroundColor: '#D4AF3715' },
+  miniPickerText: { fontFamily: 'JetBrainsMono', fontSize: 11, color: '#8A8A8A', letterSpacing: 0.5 },
+  miniPickerTextActive: { color: '#D4AF37' },
 });

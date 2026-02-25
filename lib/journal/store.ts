@@ -85,12 +85,13 @@ interface JournalState {
   openPostRitualCapture: () => void;
   closePostRitualCapture: () => void;
 
-  // Save entry with user input
+  // Save entry with user input + optional overrides for auto-captured fields
   saveFullEntry: (
     notes: string,
     intensity: ExperienceIntensity | null,
     condition: DailyCondition | null,
     feeling?: RitualFeeling | null,
+    overrides?: Partial<PendingJournalData>,
   ) => Promise<void>;
 
   // Save auto-only entry (user skipped)
@@ -160,24 +161,27 @@ export const useJournalStore = create<JournalState>((set, get) => ({
     set({ showPostRitualCapture: false, pendingData: null });
   },
 
-  saveFullEntry: async (notes, intensity, condition, feeling) => {
+  saveFullEntry: async (notes, intensity, condition, feeling, overrides) => {
     const { pendingData, entries } = get();
     if (!pendingData) return;
+
+    // Merge auto-captured data with any user overrides
+    const merged = { ...pendingData, ...overrides };
 
     const entry: JournalEntry = {
       id: generateId(),
       createdAt: new Date().toISOString(),
-      ritualName: pendingData.ritualName,
-      ritualId: pendingData.ritualId,
-      intent: pendingData.intent,
-      dynamicSelection: pendingData.dynamicSelection,
-      stepsCompleted: pendingData.stepsCompleted,
-      totalSteps: pendingData.totalSteps,
-      xpAwarded: pendingData.xpAwarded,
-      rulerOfDay: pendingData.rulerOfDay,
-      rulerOfHour: pendingData.rulerOfHour,
-      moonPhase: pendingData.moonPhase,
-      activeAspects: pendingData.activeAspects,
+      ritualName: merged.ritualName,
+      ritualId: merged.ritualId,
+      intent: merged.intent,
+      dynamicSelection: merged.dynamicSelection,
+      stepsCompleted: merged.stepsCompleted,
+      totalSteps: merged.totalSteps,
+      xpAwarded: merged.xpAwarded,
+      rulerOfDay: merged.rulerOfDay,
+      rulerOfHour: merged.rulerOfHour,
+      moonPhase: merged.moonPhase,
+      activeAspects: merged.activeAspects,
       notes,
       experienceIntensity: intensity,
       dailyCondition: condition,

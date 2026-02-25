@@ -292,12 +292,13 @@ export default function HomeScreen() {
             <View style={styles.xpNameRow}>
               <Text style={styles.xpBrandLabel}>ÆONIS</Text>
               {magicName ? (
-                <Text style={styles.xpMagicName}> · {magicName}</Text>
+                <Text style={styles.xpBrandLabel}> · {magicName}</Text>
               ) : null}
+              <Text style={styles.xpBrandLabel}> · {resolvedLevelTitle}</Text>
             </View>
             <View style={styles.xpRankRow}>
               <Text style={styles.xpLevelTitle}>
-                {resolvedLevelTitle} · Lv.{currentLevel}
+                Lv.{currentLevel}
               </Text>
               <View style={styles.xpBadge}>
                 <Text style={styles.xpBadgeText}>
@@ -858,13 +859,10 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   xpNameRow: {
-    flexDirection: 'row', alignItems: 'baseline',
+    flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap',
   },
   xpBrandLabel: {
-    fontFamily: 'Cinzel', fontSize: 22, color: '#D4AF37', letterSpacing: 3,
-  },
-  xpMagicName: {
-    fontFamily: 'Cinzel', fontSize: 16, color: '#C0C0C0', letterSpacing: 1,
+    fontFamily: 'Cinzel', fontSize: 18, color: '#D4AF37', letterSpacing: 2,
   },
   xpRankRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2,
