@@ -12,6 +12,7 @@ import Markdown from 'react-native-markdown-display';
 import { ScreenContainer } from '@/components/screen-container';
 import { HoloPad } from '@/components/holo-pad';
 import { StasisMode } from '@/components/stasis-mode';
+import { GnosisTerminal } from '@/components/gnosis-terminal';
 import { useRitualStore } from '@/lib/ritual/store';
 import { calculateHeading, isAlignedToDirection, detectTracingMotion } from '@/lib/compass/sensor-fusion';
 import { Ritual, RitualStep, RitualIntention, RitualTradition } from '@/lib/ritual/types';
@@ -31,7 +32,7 @@ import { PLANET_SYMBOLS } from '@/lib/astro/types';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
-type HubView = 'hub' | 'stasis' | 'catalog' | 'library' | 'player' | 'arsenal' | 'journal';
+type HubView = 'hub' | 'stasis' | 'catalog' | 'library' | 'player' | 'arsenal' | 'journal' | 'gnosis';
 
 // ─── Sanity Block Content → Markdown Converter ──────────────
 function blockContentToMarkdown(content: SanityScripture['content']): string {
@@ -106,6 +107,8 @@ export default function SanctumScreen() {
   const setPendingJournalData = useJournalStore((s) => s.setPendingData);
   const openPostRitualCapture = useJournalStore((s) => s.openPostRitualCapture);
   const saveAutoJournalEntry = useJournalStore((s) => s.saveAutoEntry);
+  const showPostRitualCapture = useJournalStore((s) => s.showPostRitualCapture);
+  const closePostRitualCapture = useJournalStore((s) => s.closePostRitualCapture);
   const location = useAstroStore((s) => s.location);
 
   const [hubView, setHubView] = useState<HubView>('hub');
@@ -337,6 +340,24 @@ export default function SanctumScreen() {
         onComplete={(result) => {}}
         onClose={() => setHubView('hub')}
       />
+    );
+  }
+
+  // ==========================================
+  // GNOSIS VIEW
+  // ==========================================
+  if (hubView === 'gnosis') {
+    return (
+      <ScreenContainer>
+        <GnosisTerminal onBack={() => setHubView('hub')} />
+        {showPostRitualCapture && (
+          <Modal visible animationType="slide" transparent>
+            <View style={styles.modalOverlay}>
+              <PostRitualCapture />
+            </View>
+          </Modal>
+        )}
+      </ScreenContainer>
     );
   }
 
@@ -1146,6 +1167,16 @@ export default function SanctumScreen() {
             <Text style={styles.tileDesc}>Forge & Journal</Text>
             <Text style={styles.tileMeta}>Tools & Records</Text>
           </Pressable>
+
+          <Pressable
+            onPress={() => handleTilePress('gnosis')}
+            style={({ pressed }) => [styles.tile, styles.tileGnosis, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+          >
+            <Text style={styles.tileIcon}>◈</Text>
+            <Text style={styles.tileTitle}>Gnosis</Text>
+            <Text style={styles.tileDesc}>Frequency Trance</Text>
+            <Text style={styles.tileMeta}>Psychoacoustic Focus</Text>
+          </Pressable>
         </View>
 
         {/* Quick Actions */}
@@ -1198,6 +1229,7 @@ const styles = StyleSheet.create({
   tileRituals: { borderColor: '#D4AF3730' },
   tileLibrary: { borderColor: '#3B82F630' },
   tileForge: { borderColor: '#8B5CF630' },
+  tileGnosis: { borderColor: '#D4AF3730' },
   tileIcon: { fontSize: 28, color: '#D4AF37', marginBottom: 8 },
   tileTitle: { fontFamily: 'Cinzel', fontSize: 16, color: '#E0E0E0', letterSpacing: 2 },
   tileDesc: { fontSize: 12, color: '#6B6B6B', marginTop: 4 },

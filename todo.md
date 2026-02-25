@@ -558,3 +558,28 @@
 ## Session 11 – Remove Extra Inner Ring
 
 - [x] Remove the unwanted inner breathing circle ring from Stasis active session
+
+## Session 12 – Gnosis Module
+
+### Sanctum Integration
+- [x] Add GNOSIS to Sanctum hub menu alongside Stasis and Rituals
+- [x] Route to GnosisTerminal component when selected
+
+### GnosisTerminal Setup Screen
+- [x] Dark minimal setup screen
+- [x] Fetch active Bindrune from RuneWallet store, display large and glowing (#D4AF37)
+- [x] Duration picker (pill presets, minutes, JetBrainsMono font)
+- [x] Audio frequency selector (horizontal scroll): "The Void (432Hz)", "Solar Core (126.22Hz)", "Martian Drive (144.72Hz)"
+- [x] "ENTER GNOSIS" start button
+
+### Trance Mode (Active State)
+- [x] Hide all UI except glowing Bindrune and minimalist timer
+- [x] expo-keep-awake to prevent screen sleep
+- [x] expo-audio for looping low-drone frequency audio
+- [x] Reanimated pulsing effect on Bindrune (4s in, 4s out breathing rhythm)
+
+### Completion & Logging
+- [x] Timer hits 00:00: stop audio, heavy haptic feedback (Success)
+- [x] Auto-trigger AstralRecordModal / PostRitualCapture
+- [x] Pass payload: ritualName "Gnosis State", intent "INVOKE", current astrological weather
+- [x] User can log visions/notes in journal
