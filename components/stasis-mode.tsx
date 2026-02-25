@@ -26,9 +26,9 @@ import { useRitualStore } from '@/lib/ritual/store';
 const { width: SW } = Dimensions.get('window');
 
 // ─── SVG Ring Dimensions ────────────────────────────────────
-const RING_SIZE = Math.min(SW * 0.55, 220);
+const RING_SIZE = Math.min(SW * 0.7, 280);
 const RING_CENTER = RING_SIZE / 2;
-const RING_STROKE = 2.5;
+const RING_STROKE = 3;
 const RING_RADIUS = RING_SIZE / 2 - RING_STROKE * 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
@@ -885,18 +885,18 @@ const s = StyleSheet.create({
 
   // ── Ring Area ─────────────────────────────────────────────
   ringArea: {
-    width: RING_SIZE + 50,
-    height: RING_SIZE + 50,
+    width: RING_SIZE + 40,
+    height: RING_SIZE + 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
-    marginBottom: 8,
+    marginTop: 20,
+    marginBottom: 6,
   },
   nebulaGlow: {
     position: 'absolute',
-    width: RING_SIZE + 30,
-    height: RING_SIZE + 30,
-    borderRadius: (RING_SIZE + 30) / 2,
+    width: RING_SIZE + 20,
+    height: RING_SIZE + 20,
+    borderRadius: (RING_SIZE + 20) / 2,
   },
   centerText: {
     position: 'absolute',
@@ -909,8 +909,8 @@ const s = StyleSheet.create({
   },
   phaseText: {
     fontFamily: 'Cinzel',
-    fontSize: 18,
-    letterSpacing: 4,
+    fontSize: 22,
+    letterSpacing: 5,
   },
 
   // ── Phase Pills ───────────────────────────────────────────

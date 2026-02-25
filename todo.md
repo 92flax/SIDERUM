@@ -542,3 +542,9 @@
 ### Astral Journal – Editable Auto-Fields
 - [x] All auto-filled fields (ritual name, intent, dynamic selection, planetary day, planetary hour, moon phase, aspects, XP) must be editable/typeable by user
 - [x] User can override auto-captured data if needed
+
+## Session 9 – Stasis Circle Fix
+
+- [x] Circle is way too small – restore proper size (280px area)
+- [x] SVG phase progress ring is present and fills during each breath phase
+- [x] Ring resets on each phase transition and fills fluidly over the phase duration
