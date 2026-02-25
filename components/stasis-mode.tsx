@@ -32,9 +32,6 @@ const RING_STROKE = 4;
 const RING_RADIUS = RING_SIZE / 2 - RING_STROKE * 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-// Inner breathing circle (visible ring inside the progress ring)
-const INNER_CIRCLE_SIZE = RING_SIZE - 36;
-const INNER_BORDER = 2;
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -603,9 +600,6 @@ export function StasisMode({ onComplete, onClose }: StasisModeProps) {
             />
           </Svg>
 
-          {/* Inner breathing circle (crisp ring inside the progress ring) */}
-          <View style={[s.innerCircle, { borderColor: glowColor + '40' }]} />
-
           {/* Phase text centered */}
           <View style={s.centerText}>
             <Animated.Text style={[s.phaseText, { color: glowColor }, phaseTextStyle]}>
@@ -905,13 +899,6 @@ const s = StyleSheet.create({
     width: RING_SIZE + 20,
     height: RING_SIZE + 20,
     borderRadius: (RING_SIZE + 20) / 2,
-  },
-  innerCircle: {
-    position: 'absolute',
-    width: INNER_CIRCLE_SIZE,
-    height: INNER_CIRCLE_SIZE,
-    borderRadius: INNER_CIRCLE_SIZE / 2,
-    borderWidth: INNER_BORDER,
   },
   centerText: {
     position: 'absolute',
