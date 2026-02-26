@@ -811,3 +811,25 @@
 ### Matcher Robustness
 - [x] Ensure matcher works even when CMS docs have minimal fields (no aspectKey)
 - [x] Verify the full pipeline: fetch → state → map → list items → modal
+
+## Session 24 – Gnosis Audio Engine (Local WAV Playback)
+
+### Asset Ingestion
+- [x] Copy 9 WAV files to assets/audio/ (432, 126.22, 144.72, 147.27, 148.85, 174, 183.58, 210.42, 221.23)
+- [x] Create lib/audio/sound-map.ts with require() mapping for all frequency files
+
+### FREQUENCIES Array Update
+- [x] Expand FREQUENCIES array to include all 9 frequencies (not just 3)
+- [x] Map each frequency option to its corresponding WAV file
+
+### Audio Engine Integration
+- [x] Replace getFrequencyAudioUrl (returns null) with local asset loading via sound map
+- [x] Use createAudioPlayer with local require() source instead of remote URL
+- [x] Set loop = true for infinite seamless looping
+- [x] Set playsInSilentMode = true via setAudioModeAsync
+- [x] Start playback on session start
+
+### Cleanup & Memory
+- [x] Stop and remove audio player on END SESSION
+- [x] Stop and remove audio player on component unmount
+- [x] Prevent overlapping ghost audio (check existing player before creating new)

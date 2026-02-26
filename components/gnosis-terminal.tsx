@@ -27,6 +27,7 @@ import Svg, { Line, Path, Rect, G } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { activateKeepAwake, deactivateKeepAwake, isAvailableAsync } from 'expo-keep-awake';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { getFrequencySource } from '@/lib/audio/sound-map';
 import { useRuneWalletStore, type SavedRune } from '@/lib/store/rune-wallet';
 import { generateBindruneData, ELDER_FUTHARK, type BindruneRenderData } from '@/lib/runes/futhark';
 import { useJournalStore, type PendingJournalData } from '@/lib/journal/store';
@@ -50,6 +51,12 @@ const FREQUENCIES: FrequencyOption[] = [
   { id: 'void', name: 'The Void', frequency: '432Hz', description: 'Universal Harmony', color: '#8B5CF6' },
   { id: 'solar', name: 'Solar Core', frequency: '126.22Hz', description: 'Sun Frequency', color: '#D4AF37' },
   { id: 'mars', name: 'Martian Drive', frequency: '144.72Hz', description: 'Mars Frequency', color: '#EF4444' },
+  { id: 'earth', name: 'Earth Pulse', frequency: '147.27Hz', description: 'Earth Frequency', color: '#22C55E' },
+  { id: 'saturn', name: 'Saturnian Gate', frequency: '148.85Hz', description: 'Saturn Frequency', color: '#6B7280' },
+  { id: 'healing', name: 'Healing Tone', frequency: '174Hz', description: 'Pain Reduction', color: '#06B6D4' },
+  { id: 'venus', name: 'Venusian Grace', frequency: '183.58Hz', description: 'Venus Frequency', color: '#EC4899' },
+  { id: 'moon', name: 'Lunar Tide', frequency: '210.42Hz', description: 'Moon Frequency', color: '#C0C0C0' },
+  { id: 'jupiter', name: 'Jovian Throne', frequency: '221.23Hz', description: 'Jupiter Frequency', color: '#A855F7' },
 ];
 
 // ─── Duration Presets (minutes) ────────────────────────────
@@ -266,16 +273,31 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
   // ─── Audio ──────────────────────────────────────────────
   const startAudio = useCallback(async () => {
     try {
+      // Configure audio mode for meditation (plays in silent mode on iOS)
       if (Platform.OS !== 'web') {
         await setAudioModeAsync({ playsInSilentMode: true });
       }
-      const audioUrl = getFrequencyAudioUrl(selectedFreq.id);
-      if (audioUrl) {
-        const player = createAudioPlayer({ uri: audioUrl });
+
+      // Clean up any existing player first to prevent ghost audio
+      if (audioPlayerRef.current) {
+        try {
+          audioPlayerRef.current.pause();
+          audioPlayerRef.current.remove();
+        } catch {}
+        audioPlayerRef.current = null;
+      }
+
+      // Load the local WAV asset for the selected frequency
+      const source = getFrequencyAudioSource(selectedFreq);
+      if (source) {
+        const player = createAudioPlayer(source);
         player.loop = true;
         player.volume = 0.6;
         player.play();
         audioPlayerRef.current = player;
+        console.log(`[Gnosis] Audio started: ${selectedFreq.frequency} (loop=true)`);
+      } else {
+        console.warn(`[Gnosis] No audio source found for ${selectedFreq.frequency}`);
       }
     } catch (e) {
       console.warn('[Gnosis] Audio init failed:', e);
@@ -407,9 +429,11 @@ export function GnosisTerminal({ onBack }: GnosisTerminalProps) {
     };
   }, []);
 
-  // ─── Frequency audio URL helper ─────────────────────────
-  function getFrequencyAudioUrl(freqId: string): string | null {
-    return null;
+  // ─── Frequency audio source helper ─────────────────────
+  function getFrequencyAudioSource(freq: FrequencyOption): any | null {
+    // Extract Hz number from frequency string (e.g., '432Hz' → '432', '126.22Hz' → '126.22')
+    const hz = freq.frequency.replace(/Hz$/i, '');
+    return getFrequencySource(hz);
   }
 
   // ═══════════════════════════════════════════════════════════
