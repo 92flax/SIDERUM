@@ -756,3 +756,20 @@
 - [x] Loop button: glowing gold border (#D4AF37), vantablack background
 - [x] Cycle counter in JetBrainsMono
 - [x] ÆONIS aesthetic throughout
+
+## Session 21 – Event Horizon CMS Intel Feed
+
+### List Item CMS Cross-Reference
+- [x] Match each AstroEvent to a SanityCosmicEvent by type + planets (aspectKey matching)
+- [x] Show magickalDirective preview (2 lines) below date in each event card
+- [x] Fallback text "> Awaiting cosmic intel..." if no CMS match found
+
+### Typography & Aesthetics
+- [x] Preview text: JetBrainsMono, fontSize 11-12, Ash Grey (#A3A3A3)
+- [x] Left border on directive preview (borderLeftWidth: 2, borderLeftColor: #D4AF37, paddingLeft: 8)
+- [x] Terminal readout aesthetic
+
+### Modal Upgrade
+- [x] Full magickalDirective in expanded event modal (replace dry API notes)
+- [x] Full warning from CMS in modal
+- [x] Improve matching logic: match by event type + planet names

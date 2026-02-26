@@ -249,6 +249,38 @@ export default function HomeScreen() {
     };
   }, [chartData, moonPhase]);
 
+  // Build a lookup: match AstroEvent → SanityCosmicEvent by aspectKey, type, and planet names
+  const cosmicEventMap = useMemo(() => {
+    const map = new Map<string, SanityCosmicEvent>();
+    if (cosmicEvents.length === 0) return map;
+    for (const evt of eventHorizon.events) {
+      // Try matching by aspectKey (e.g. "Mercury conjunct Venus" matches title "Mercury-Venus Conjunction")
+      const matched = cosmicEvents.find(ce => {
+        if (!ce.aspectKey) return false;
+        const key = ce.aspectKey.toLowerCase();
+        const title = evt.title.toLowerCase();
+        // Direct title match
+        if (title.includes(key) || key.includes(title)) return true;
+        // Match by planet names in both
+        const planets = [evt.planet, evt.planet2].filter(Boolean).map(p => p!.toLowerCase());
+        const keyHasPlanets = planets.length > 0 && planets.every(p => key.includes(p));
+        // Also match event type keywords
+        const typeKeywords: Record<string, string[]> = {
+          conjunction: ['conjunct', 'conjunction'],
+          opposition: ['opposition', 'oppose'],
+          retrograde_start: ['retrograde', 'stations retrograde'],
+          retrograde_end: ['direct', 'stations direct'],
+          solar_eclipse: ['solar eclipse'],
+          lunar_eclipse: ['lunar eclipse'],
+        };
+        const typeMatch = (typeKeywords[evt.type] ?? []).some(kw => key.includes(kw));
+        return keyHasPlanets && typeMatch;
+      });
+      if (matched) map.set(evt.id, matched);
+    }
+    return map;
+  }, [eventHorizon.events, cosmicEvents]);
+
   const handleProFeature = (featureId: string) => {
     if (!isFeatureUnlocked(featureId)) {
       setPaywallFeature(featureId);
@@ -603,11 +635,12 @@ export default function HomeScreen() {
               </View>
               {filteredEvents.slice(0, 5).map((evt) => {
                 const daysAway = Math.ceil((evt.date.getTime() - date.getTime()) / 86400000);
+                const matchedCms = cosmicEventMap.get(evt.id);
                 return (
                   <Pressable
                     key={evt.id}
                     onPress={() => handleEventTap(evt)}
-                    style={({ pressed }) => [styles.eventCard, pressed && { opacity: 0.7 }]}
+                    style={({ pressed }) => [styles.eventCard, matchedCms ? styles.eventCardWithIntel : undefined, pressed && { opacity: 0.7 }]}
                   >
                     <Text style={styles.eventType}>
                       {evt.type === 'solar_eclipse' ? '🌑' :
@@ -622,6 +655,13 @@ export default function HomeScreen() {
                         {evt.date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                         {daysAway > 0 ? ` · in ${daysAway}d` : ' · TODAY'}
                       </Text>
+                      <View style={styles.intelPreview}>
+                        <Text style={styles.intelPreviewText} numberOfLines={2}>
+                          {matchedCms?.magickalDirective
+                            ? matchedCms.magickalDirective
+                            : '> Awaiting cosmic intel...'}
+                        </Text>
+                      </View>
                     </View>
                   </Pressable>
                 );
@@ -711,24 +751,32 @@ export default function HomeScreen() {
                     </View>
                   )}
                 </View>
-                {/* Magickal Directive from CMS (if a cosmic event matches) */}
+                {/* Magickal Directive from CMS (replaces dry API notes) */}
                 {(() => {
-                  const matchedCosmic = cosmicEvents.find(ce =>
-                    ce.aspectKey && selectedEvent.title.toLowerCase().includes(ce.aspectKey.toLowerCase())
-                  );
-                  if (!matchedCosmic) return null;
+                  const matchedCosmic = cosmicEventMap.get(selectedEvent.id)
+                    ?? cosmicEvents.find(ce =>
+                      ce.aspectKey && selectedEvent.title.toLowerCase().includes(ce.aspectKey.toLowerCase())
+                    );
                   return (
                     <View style={styles.directiveSection}>
-                      {matchedCosmic.magickalDirective && (
-                        <>
-                          <Text style={styles.directiveHeader}>[ MAGICKAL DIRECTIVE ]</Text>
-                          <Text style={styles.directiveText}>{matchedCosmic.magickalDirective}</Text>
-                        </>
+                      <Text style={styles.directiveHeader}>[ MAGICKAL DIRECTIVE ]</Text>
+                      {matchedCosmic?.magickalDirective ? (
+                        <Text style={styles.directiveText}>{matchedCosmic.magickalDirective}</Text>
+                      ) : (
+                        <Text style={styles.directiveFallback}>&gt; Awaiting cosmic intel from the Sanctum...</Text>
                       )}
-                      {matchedCosmic.warning && (
+                      {matchedCosmic?.warning && (
                         <>
                           <Text style={styles.directiveWarningHeader}>[ WARNING ]</Text>
                           <Text style={styles.directiveWarning}>{matchedCosmic.warning}</Text>
+                        </>
+                      )}
+                      {matchedCosmic?.supportedIntents && matchedCosmic.supportedIntents.length > 0 && (
+                        <>
+                          <Text style={styles.directiveSupportedHeader}>[ SUPPORTED INTENTS ]</Text>
+                          <Text style={styles.directiveSupportedText}>
+                            {matchedCosmic.supportedIntents.join(' · ')}
+                          </Text>
                         </>
                       )}
                     </View>
@@ -1080,5 +1128,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#F87171',
     lineHeight: 20,
+  },
+  directiveFallback: {
+    fontFamily: 'JetBrainsMono',
+    fontSize: 12,
+    color: '#4A4A4A',
+    fontStyle: 'italic' as const,
+    lineHeight: 18,
+  },
+  directiveSupportedHeader: {
+    fontFamily: 'JetBrainsMono',
+    fontSize: 11,
+    color: '#3B82F6',
+    letterSpacing: 2,
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  directiveSupportedText: {
+    fontFamily: 'JetBrainsMono',
+    fontSize: 12,
+    color: '#A3A3A3',
+    letterSpacing: 1,
+  },
+
+  // Event Card Intel Preview
+  eventCardWithIntel: {
+    borderColor: '#D4AF3725',
+  },
+  intelPreview: {
+    marginTop: 6,
+    borderLeftWidth: 2,
+    borderLeftColor: '#D4AF37',
+    paddingLeft: 8,
+  },
+  intelPreviewText: {
+    fontFamily: 'JetBrainsMono',
+    fontSize: 11,
+    color: '#A3A3A3',
+    lineHeight: 16,
   },
 });
