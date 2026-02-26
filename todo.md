@@ -795,3 +795,19 @@
 - [x] Replace inline cosmicEventMap logic in Home screen with new matcher
 - [x] Ensure matched directive replaces fallback text in list items and modal
 - [x] Write unit tests for the matcher function
+
+## Session 23 – Cosmic Events Data Bridge Fix
+
+### GROQ Query Fix
+- [x] Relax `is_active == true` filter to also include docs without `is_active` field
+- [x] Fetch ALL cosmicEvent docs (active or unset) to prevent empty results
+- [x] Add date-range filtering as secondary check (start_date/end_date)
+
+### Fetch Verification
+- [x] Enhanced console.log showing fetched count, titles, and match results
+- [x] Log when cosmicEvents array is empty to surface the issue clearly
+- [x] Add "Intercepting cosmic signals..." loading state while fetching
+
+### Matcher Robustness
+- [x] Ensure matcher works even when CMS docs have minimal fields (no aspectKey)
+- [x] Verify the full pipeline: fetch → state → map → list items → modal

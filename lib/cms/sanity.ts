@@ -289,11 +289,14 @@ export async function getBreathingRhythms(): Promise<SanityBreathingRhythm[]> {
 }
 
 /**
- * Fetch active cosmic events from CMS.
+ * Fetch cosmic events from CMS.
  * These provide occult interpretations for astrological aspects.
+ * Fetches all cosmicEvent docs (active or without is_active field set)
+ * to prevent empty results when CMS docs don't have the flag.
  */
 export async function getCosmicEvents(): Promise<SanityCosmicEvent[]> {
-  const query = `*[_type == "cosmicEvent" && is_active == true] {
+  // Fetch ALL cosmicEvent docs – filter out explicitly inactive ones only
+  const query = `*[_type == "cosmicEvent" && is_active != false] {
     _id,
     _type,
     title,
@@ -308,6 +311,12 @@ export async function getCosmicEvents(): Promise<SanityCosmicEvent[]> {
 
   try {
     const results = await client.fetch<SanityCosmicEvent[]>(query);
+    if (__DEV__) {
+      console.log('[Sanity] cosmicEvents fetched:', results.length);
+      if (results.length === 0) {
+        console.warn('[Sanity] No cosmicEvent documents found in CMS. Create them in Sanity Studio.');
+      }
+    }
     return results;
   } catch (error) {
     console.warn('[Sanity] Failed to fetch cosmic events:', error);

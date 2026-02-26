@@ -80,6 +80,7 @@ export default function HomeScreen() {
   const [stasisBuffActive, setStasisBuffActive] = useState(false);
   const [activeEvents, setActiveEvents] = useState<SanityEvent[]>([]);
   const [cosmicEvents, setCosmicEvents] = useState<SanityCosmicEvent[]>([]);
+  const [cosmicEventsLoading, setCosmicEventsLoading] = useState(true);
   const [showMoonModal, setShowMoonModal] = useState(false);
   const router = useRouter();
 
@@ -91,10 +92,12 @@ export default function HomeScreen() {
     });
     getActiveEvents().then(setActiveEvents).catch(() => {});
     getCosmicEvents().then((events) => {
-      if (__DEV__) console.log('[ÆONIS] Fetched cosmicEvents:', events.length, events.map(e => e.title));
+      console.log('[ÆONIS] FETCHED SANITY EVENTS:', events.length, JSON.stringify(events.map(e => ({ title: e.title, aspectKey: e.aspectKey, hasDirective: !!e.magickalDirective }))));
       setCosmicEvents(events);
+      setCosmicEventsLoading(false);
     }).catch((err) => {
-      if (__DEV__) console.warn('[ÆONIS] Failed to fetch cosmicEvents:', err);
+      console.warn('[ÆONIS] Failed to fetch cosmicEvents:', err);
+      setCosmicEventsLoading(false);
     });
     // Load CMS level titles (fall back to local)
     getLevels().then((levels) => {
@@ -258,8 +261,11 @@ export default function HomeScreen() {
   // Build a lookup: match AstroEvent → SanityCosmicEvent using robust keyword matcher
   const cosmicEventMap = useMemo(() => {
     const map = buildCosmicEventMap(eventHorizon.events, cosmicEvents);
-    if (__DEV__ && map.size > 0) {
-      console.log('[ÆONIS] Matched', map.size, 'events with CMS data');
+    console.log(`[ÆONIS] cosmicEventMap: ${map.size} matches from ${eventHorizon.events.length} API events × ${cosmicEvents.length} CMS docs`);
+    if (map.size > 0) {
+      map.forEach((cms, evtId) => {
+        console.log(`  ✓ ${evtId} → ${cms.title}`);
+      });
     }
     return map;
   }, [eventHorizon.events, cosmicEvents]);
@@ -642,7 +648,9 @@ export default function HomeScreen() {
                         <Text style={styles.intelPreviewText} numberOfLines={2}>
                           {matchedCms?.magickalDirective
                             ? matchedCms.magickalDirective
-                            : '> Awaiting cosmic intel...'}
+                            : cosmicEventsLoading
+                              ? '> Intercepting cosmic signals...'
+                              : '> Awaiting cosmic intel...'}
                         </Text>
                       </View>
                     </View>
@@ -744,7 +752,11 @@ export default function HomeScreen() {
                       {matchedCosmic?.magickalDirective ? (
                         <Text style={styles.directiveText}>{matchedCosmic.magickalDirective}</Text>
                       ) : (
-                        <Text style={styles.directiveFallback}>&gt; Awaiting cosmic intel from the Sanctum...</Text>
+                        <Text style={styles.directiveFallback}>
+                          {cosmicEventsLoading
+                            ? '> Intercepting cosmic signals...'
+                            : '> Awaiting cosmic intel from the Sanctum...'}
+                        </Text>
                       )}
                       {matchedCosmic?.warning && (
                         <>
