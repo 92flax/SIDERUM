@@ -773,3 +773,25 @@
 - [x] Full magickalDirective in expanded event modal (replace dry API notes)
 - [x] Full warning from CMS in modal
 - [x] Improve matching logic: match by event type + planet names
+
+## Session 22 – Event Matcher Fix
+
+### Robust Matching Algorithm
+- [x] Create lib/astro/event-matcher.ts with matchEventWithCMS helper
+- [x] Match by structured fields (event type + planet names), NOT exact title strings
+- [x] Handle conjunction: match eventType keyword + both planet names
+- [x] Handle lunar eclipse: match "eclipse" + "moon" as primary planet
+- [x] Handle solar eclipse: match "eclipse" + "sun" as primary planet
+- [x] Handle retrograde: match "retrograde" + planet name
+- [x] Handle opposition: match "opposition" + planet names
+- [x] Case-insensitive, keyword-based parsing throughout
+- [x] Also match by CMS title keywords as fallback (strip flavor text in parens)
+
+### Data Verification
+- [x] Add console.log for cosmicEvents fetch to verify data is arriving
+- [x] Ensure GROQ query executes on app mount and array is not empty
+
+### Integration
+- [x] Replace inline cosmicEventMap logic in Home screen with new matcher
+- [x] Ensure matched directive replaces fallback text in list items and modal
+- [x] Write unit tests for the matcher function

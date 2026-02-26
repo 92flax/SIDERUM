@@ -21,6 +21,7 @@ import { calculatePowerRating, getPowerLabel } from '@/lib/astro/power-rating';
 import { calculateAstralPotency, AstralPotencyReport } from '@/lib/astro/potency-engine';
 import { getActiveEvents, SanityEvent, getCosmicEvents, SanityCosmicEvent } from '@/lib/cms/sanity';
 import { BuffHud } from '@/components/buff-hud';
+import { buildCosmicEventMap, matchEventWithCMS } from '@/lib/astro/event-matcher';
 import { MoonIntelModal, MoonIntelData } from '@/components/moon-intel-modal';
 import { useRouter } from 'expo-router';
 import { useNatalStore } from '@/lib/store/natal-store';
@@ -89,7 +90,12 @@ export default function HomeScreen() {
       if (name) setMagicName(name);
     });
     getActiveEvents().then(setActiveEvents).catch(() => {});
-    getCosmicEvents().then(setCosmicEvents).catch(() => {});
+    getCosmicEvents().then((events) => {
+      if (__DEV__) console.log('[ÆONIS] Fetched cosmicEvents:', events.length, events.map(e => e.title));
+      setCosmicEvents(events);
+    }).catch((err) => {
+      if (__DEV__) console.warn('[ÆONIS] Failed to fetch cosmicEvents:', err);
+    });
     // Load CMS level titles (fall back to local)
     getLevels().then((levels) => {
       if (levels.length > 0) {
@@ -249,34 +255,11 @@ export default function HomeScreen() {
     };
   }, [chartData, moonPhase]);
 
-  // Build a lookup: match AstroEvent → SanityCosmicEvent by aspectKey, type, and planet names
+  // Build a lookup: match AstroEvent → SanityCosmicEvent using robust keyword matcher
   const cosmicEventMap = useMemo(() => {
-    const map = new Map<string, SanityCosmicEvent>();
-    if (cosmicEvents.length === 0) return map;
-    for (const evt of eventHorizon.events) {
-      // Try matching by aspectKey (e.g. "Mercury conjunct Venus" matches title "Mercury-Venus Conjunction")
-      const matched = cosmicEvents.find(ce => {
-        if (!ce.aspectKey) return false;
-        const key = ce.aspectKey.toLowerCase();
-        const title = evt.title.toLowerCase();
-        // Direct title match
-        if (title.includes(key) || key.includes(title)) return true;
-        // Match by planet names in both
-        const planets = [evt.planet, evt.planet2].filter(Boolean).map(p => p!.toLowerCase());
-        const keyHasPlanets = planets.length > 0 && planets.every(p => key.includes(p));
-        // Also match event type keywords
-        const typeKeywords: Record<string, string[]> = {
-          conjunction: ['conjunct', 'conjunction'],
-          opposition: ['opposition', 'oppose'],
-          retrograde_start: ['retrograde', 'stations retrograde'],
-          retrograde_end: ['direct', 'stations direct'],
-          solar_eclipse: ['solar eclipse'],
-          lunar_eclipse: ['lunar eclipse'],
-        };
-        const typeMatch = (typeKeywords[evt.type] ?? []).some(kw => key.includes(kw));
-        return keyHasPlanets && typeMatch;
-      });
-      if (matched) map.set(evt.id, matched);
+    const map = buildCosmicEventMap(eventHorizon.events, cosmicEvents);
+    if (__DEV__ && map.size > 0) {
+      console.log('[ÆONIS] Matched', map.size, 'events with CMS data');
     }
     return map;
   }, [eventHorizon.events, cosmicEvents]);
@@ -754,9 +737,7 @@ export default function HomeScreen() {
                 {/* Magickal Directive from CMS (replaces dry API notes) */}
                 {(() => {
                   const matchedCosmic = cosmicEventMap.get(selectedEvent.id)
-                    ?? cosmicEvents.find(ce =>
-                      ce.aspectKey && selectedEvent.title.toLowerCase().includes(ce.aspectKey.toLowerCase())
-                    );
+                    ?? matchEventWithCMS(selectedEvent, cosmicEvents);
                   return (
                     <View style={styles.directiveSection}>
                       <Text style={styles.directiveHeader}>[ MAGICKAL DIRECTIVE ]</Text>
