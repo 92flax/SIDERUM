@@ -833,3 +833,39 @@
 - [x] Stop and remove audio player on END SESSION
 - [x] Stop and remove audio player on component unmount
 - [x] Prevent overlapping ghost audio (check existing player before creating new)
+
+## Session 25 – Egregore Console & Chamber
+
+### Part 1: Data & State
+- [x] Add SanityGlobalSyncEvent type to Sanity CMS client (title, directive, targetDate, baseNodeCount, frequencyHz)
+- [x] Add GROQ query: fetch next upcoming globalEvent where targetDate > now()
+- [x] Create Grid Engine store (lib/store/grid-engine.ts) with gridCharge (0-100%), RSVP state
+- [x] Grid charge logic: +15% on ritual completion, -10% per 24h inactivity
+- [x] Persist gridCharge and lastChargeUpdate in AsyncStorage
+
+### Part 2: Egregore Console (Adept Profile Screen Overhaul)
+- [x] Replace old stats section with P2P Constellation SVG visualization
+- [x] Center glowing Local Node connected via tethers to outer nodes
+- [x] High charge (>80%): Gold pulsing, solid tethers; Low (<20%): Ash Grey, broken tethers
+- [x] Text: "LOCAL NODE CHARGE: X% [ANCHOR]" and "GLOBAL EGREGORE STABILITY: Y%"
+- [x] Global Sync Operations section: display fetched Sanity event (title, date, directive preview)
+- [x] PLEDGE ENERGY button → saves RSVP, changes to NODE ALIGNED + simulated node count
+- [x] Astral Chronicles: vertical timeline of past rituals/stasis with gold left line
+- [x] Keep Settings link at bottom
+
+### Part 3: Egregore Chamber (New Screen)
+- [x] Create EgregoreChamber as inline component in adept.tsx (full-screen Modal)
+- [x] Phase 1 STANDBY: Vantablack, T-MINUS countdown to targetDate, simulated node counter
+- [x] Phase 2 IGNITION: Flash screen gold 100ms at 00:00:00, heavy haptic
+- [x] Phase 3 CHANNELING: Count-UP timer, breathing golden Core/Sphere, particle flow animation
+- [x] Phase 3: Display Sanity directive in Cinzel below core
+- [x] Phase 3: Terminal Feed with simulated P2P logs every 1-4 seconds
+- [x] Phase 4 DISCONNECT: SEVER UPLINK button stops audio, shows final message
+- [x] Phase 4: Award massive XP, set gridCharge to 100%
+- [x] ENTER UPLINK button available 15 min before targetDate on Console
+
+### Aesthetics
+- [x] Vantablack (#050505) base throughout
+- [x] SIDERUM Gold (#D4AF37) for active elements
+- [x] Ash Grey (#A3A3A3) for inactive/terminal text
+- [x] Cinzel for headers/directives, JetBrainsMono for numbers/terminal

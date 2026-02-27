@@ -324,6 +324,47 @@ export async function getCosmicEvents(): Promise<SanityCosmicEvent[]> {
   }
 }
 
+/** Global Sync Event from CMS – scheduled Egregore ceremonies */
+export interface SanityGlobalSyncEvent {
+  _id: string;
+  _type: 'globalSyncEvent';
+  title: string;
+  directive?: string;
+  targetDate: string; // ISO date-time
+  baseNodeCount?: number;
+  frequencyHz?: string;
+  is_active?: boolean;
+}
+
+/**
+ * Fetch the next upcoming global sync event.
+ * Returns the single closest future event, or null.
+ */
+export async function getNextSyncEvent(): Promise<SanityGlobalSyncEvent | null> {
+  const now = new Date().toISOString();
+  const query = `*[_type == "globalSyncEvent" && targetDate > $now && is_active != false] | order(targetDate asc) [0] {
+    _id,
+    _type,
+    title,
+    directive,
+    targetDate,
+    baseNodeCount,
+    frequencyHz,
+    is_active
+  }`;
+
+  try {
+    const result = await client.fetch<SanityGlobalSyncEvent | null>(query, { now });
+    if (__DEV__) {
+      console.log('[Sanity] Next sync event:', result?.title ?? 'none');
+    }
+    return result;
+  } catch (error) {
+    console.warn('[Sanity] Failed to fetch sync event:', error);
+    return null;
+  }
+}
+
 // ─── Sanity Client Export ────────────────────────────────────
 
 /** Direct access to the Sanity client for custom queries */
